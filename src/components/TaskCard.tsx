@@ -16,7 +16,7 @@ const priorityLabel = { high: "Alta", medium: "Média", low: "Baixa" };
 export function TaskCard({ task, onToggle, onEdit, onDelete }: Props) {
   const isCompleted = task.status === "completed";
   
-  // Alterado de task.dueDate para task.due_date
+  // CORREÇÃO: Usar due_date vindo do Supabase
   const isOverdue =
     !isCompleted && 
     task.due_date && 
@@ -67,7 +67,7 @@ export function TaskCard({ task, onToggle, onEdit, onDelete }: Props) {
                 isOverdue ? "text-destructive font-semibold" : "text-muted-foreground"
               }`}
             >
-              {/* Alterado de task.dueDate para task.due_date */}
+              {/* CORREÇÃO: Renderização segura do campo due_date */}
               {task.due_date ? format(new Date(task.due_date), "dd MMM yyyy", { locale: ptBR }) : "Sem data"}
               {isOverdue && " — Atrasada"}
             </span>

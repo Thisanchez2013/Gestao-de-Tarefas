@@ -9,8 +9,10 @@ function sortTasks(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
     const pDiff = priorityOrder[a.priority as keyof typeof priorityOrder] - priorityOrder[b.priority as keyof typeof priorityOrder];
     if (pDiff !== 0) return pDiff;
-    // Importante: Garantir que usamos due_date com underline aqui também
-    return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+    // CORREÇÃO: Verificação de segurança para a data na ordenação
+    const dateA = a.due_date ? new Date(a.due_date).getTime() : 0;
+    const dateB = b.due_date ? new Date(b.due_date).getTime() : 0;
+    return dateA - dateB;
   });
 }
 
@@ -21,7 +23,6 @@ export function useTaskStore() {
   const [filterPriority, setFilterPriority] = useState<FilterPriority>("all");
   const { toast } = useToast();
 
-  // 1. Função para carregar tarefas
   const fetchTasks = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -41,24 +42,20 @@ export function useTaskStore() {
     }
   }, [toast]);
 
-  // 2. Efeito para carregamento inicial e CONFIGURAÇÃO DO REALTIME
   useEffect(() => {
     fetchTasks();
 
-    // Configura o canal Realtime para ouvir mudanças no banco
     const channel = supabase
       .channel('tasks-updates')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tasks' },
-        (payload) => {
-          console.log('Mudança detectada no Realtime:', payload);
-          fetchTasks(); // Recarrega a lista automaticamente para todos os usuários logados
+        () => {
+          fetchTasks(); 
         }
       )
       .subscribe();
 
-    // Limpa a conexão ao desmontar o componente
     return () => {
       supabase.removeChannel(channel);
     };
@@ -83,7 +80,7 @@ export function useTaskStore() {
           title: formData.title,
           description: formData.description,
           priority: formData.priority,
-          due_date: formData.due_date,
+          due_date: formData.due_date, // Salva corretamente no banco
           status: 'pending'
         }]);
 
@@ -91,6 +88,27 @@ export function useTaskStore() {
       toast({ title: "Tarefa adicionada!" });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro ao adicionar", description: error.message });
+    }
+  };
+
+  // CORREÇÃO: Função updateTask adicionada para evitar duplicação na edição
+  const updateTask = async (id: string, formData: Partial<TaskFormData>) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          title: formData.title,
+          description: formData.description,
+          priority: formData.priority,
+          due_date: formData.due_date, // Garante que a data seja atualizada
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+      toast({ title: "Tarefa atualizada com sucesso!" });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro ao atualizar", description: error.message });
     }
   };
 
@@ -162,9 +180,12 @@ export function useTaskStore() {
     setFilterStatus,
     setFilterPriority,
     addTask,
+    updateTask, // Exposto para o TaskFormDialog
     softDelete,
     restore,
     permanentDelete,
     toggleStatus,
+    pendingCount: activeTasks.filter(t => t.status === 'pending').length,
+    completedCount: activeTasks.filter(t => t.status === 'completed').length,
   };
 }
