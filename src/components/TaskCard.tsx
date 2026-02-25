@@ -15,8 +15,12 @@ const priorityLabel = { high: "Alta", medium: "Média", low: "Baixa" };
 
 export function TaskCard({ task, onToggle, onEdit, onDelete }: Props) {
   const isCompleted = task.status === "completed";
+  
+  // Alterado de task.dueDate para task.due_date
   const isOverdue =
-    !isCompleted && new Date(task.dueDate) < new Date(new Date().toDateString());
+    !isCompleted && 
+    task.due_date && 
+    new Date(task.due_date) < new Date(new Date().toDateString());
 
   return (
     <div
@@ -63,7 +67,8 @@ export function TaskCard({ task, onToggle, onEdit, onDelete }: Props) {
                 isOverdue ? "text-destructive font-semibold" : "text-muted-foreground"
               }`}
             >
-              {format(new Date(task.dueDate), "dd MMM yyyy", { locale: ptBR })}
+              {/* Alterado de task.dueDate para task.due_date */}
+              {task.due_date ? format(new Date(task.due_date), "dd MMM yyyy", { locale: ptBR }) : "Sem data"}
               {isOverdue && " — Atrasada"}
             </span>
           </div>

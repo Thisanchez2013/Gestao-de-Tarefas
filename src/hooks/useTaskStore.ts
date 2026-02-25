@@ -1,46 +1,71 @@
 import { useState, useCallback, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 import type { Task, TaskFormData, FilterStatus, FilterPriority } from "@/types/task";
-
-const STORAGE_KEY = "task-manager-tasks";
-
-function generateId(): string {
-  return crypto.randomUUID();
-}
-
-function loadTasks(): Task[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveTasks(tasks: Task[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-}
+import { useToast } from "@/hooks/use-toast";
 
 const priorityOrder = { high: 0, medium: 1, low: 2 };
 
 function sortTasks(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
-    const pDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
+    const pDiff = priorityOrder[a.priority as keyof typeof priorityOrder] - priorityOrder[b.priority as keyof typeof priorityOrder];
     if (pDiff !== 0) return pDiff;
-    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    // Importante: Garantir que usamos due_date com underline aqui também
+    return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
   });
 }
 
 export function useTaskStore() {
-  const [tasks, setTasks] = useState<Task[]>(loadTasks);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [filterPriority, setFilterPriority] = useState<FilterPriority>("all");
+  const { toast } = useToast();
 
+  // 1. Função para carregar tarefas
+  const fetchTasks = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*');
+
+      if (error) throw error;
+      setTasks(data || []);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao carregar tarefas",
+        description: error.message
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  // 2. Efeito para carregamento inicial e CONFIGURAÇÃO DO REALTIME
   useEffect(() => {
-    saveTasks(tasks);
-  }, [tasks]);
+    fetchTasks();
 
-  const activeTasks = tasks.filter((t) => !t.deletedAt);
-  const trashedTasks = tasks.filter((t) => !!t.deletedAt);
+    // Configura o canal Realtime para ouvir mudanças no banco
+    const channel = supabase
+      .channel('tasks-updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks' },
+        (payload) => {
+          console.log('Mudança detectada no Realtime:', payload);
+          fetchTasks(); // Recarrega a lista automaticamente para todos os usuários logados
+        }
+      )
+      .subscribe();
+
+    // Limpa a conexão ao desmontar o componente
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchTasks]);
+
+  const activeTasks = tasks.filter((t) => !t.deleted_at);
+  const trashedTasks = tasks.filter((t) => !!t.deleted_at);
 
   const filteredTasks = sortTasks(
     activeTasks.filter((t) => {
@@ -50,72 +75,93 @@ export function useTaskStore() {
     })
   );
 
-  const pendingCount = activeTasks.filter((t) => t.status === "pending").length;
-  const completedCount = activeTasks.filter((t) => t.status === "completed").length;
+  const addTask = async (formData: TaskFormData) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .insert([{
+          title: formData.title,
+          description: formData.description,
+          priority: formData.priority,
+          due_date: formData.due_date,
+          status: 'pending'
+        }]);
 
-  const addTask = useCallback((data: TaskFormData) => {
-    const now = new Date().toISOString();
-    const task: Task = {
-      ...data,
-      id: generateId(),
-      createdAt: now,
-      updatedAt: now,
-      deletedAt: null,
-    };
-    setTasks((prev) => [...prev, task]);
-  }, []);
+      if (error) throw error;
+      toast({ title: "Tarefa adicionada!" });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro ao adicionar", description: error.message });
+    }
+  };
 
-  const updateTask = useCallback((id: string, data: Partial<TaskFormData>) => {
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === id ? { ...t, ...data, updatedAt: new Date().toISOString() } : t
-      )
-    );
-  }, []);
+  const toggleStatus = async (id: string) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
 
-  const softDelete = useCallback((id: string) => {
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === id ? { ...t, deletedAt: new Date().toISOString() } : t
-      )
-    );
-  }, []);
+    const newStatus = task.status === "pending" ? "completed" : "pending";
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', id);
 
-  const restore = useCallback((id: string) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, deletedAt: null } : t))
-    );
-  }, []);
+      if (error) throw error;
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro ao atualizar", description: error.message });
+    }
+  };
 
-  const permanentDelete = useCallback((id: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+  const softDelete = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', id);
 
-  const toggleStatus = useCallback((id: string) => {
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              status: t.status === "pending" ? "completed" : "pending",
-              updatedAt: new Date().toISOString(),
-            }
-          : t
-      )
-    );
-  }, []);
+      if (error) throw error;
+      toast({ title: "Tarefa movida para a lixeira" });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro ao excluir", description: error.message });
+    }
+  };
+
+  const restore = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ deleted_at: null })
+        .eq('id', id);
+
+      if (error) throw error;
+      toast({ title: "Tarefa restaurada" });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro ao restaurar", description: error.message });
+    }
+  };
+
+  const permanentDelete = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      toast({ title: "Tarefa excluída permanentemente" });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Erro ao excluir", description: error.message });
+    }
+  };
 
   return {
     tasks: filteredTasks,
     trashedTasks,
-    pendingCount,
-    completedCount,
+    loading,
     filterStatus,
     filterPriority,
     setFilterStatus,
     setFilterPriority,
     addTask,
-    updateTask,
     softDelete,
     restore,
     permanentDelete,
