@@ -9,7 +9,7 @@ function sortTasks(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
     const pDiff = priorityOrder[a.priority as keyof typeof priorityOrder] - priorityOrder[b.priority as keyof typeof priorityOrder];
     if (pDiff !== 0) return pDiff;
-    // CORREÇÃO: Verificação de segurança para a data na ordenação
+    // Ordenação por data de vencimento
     const dateA = a.due_date ? new Date(a.due_date).getTime() : 0;
     const dateB = b.due_date ? new Date(b.due_date).getTime() : 0;
     return dateA - dateB;
@@ -21,6 +21,7 @@ export function useTaskStore() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [filterPriority, setFilterPriority] = useState<FilterPriority>("all");
+  const [searchQuery, setSearchQuery] = useState(""); // Novo: Estado de busca
   const { toast } = useToast();
 
   const fetchTasks = useCallback(async () => {
@@ -68,6 +69,8 @@ export function useTaskStore() {
     activeTasks.filter((t) => {
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterPriority !== "all" && t.priority !== filterPriority) return false;
+      // Filtro de Busca por Título
+      if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
       return true;
     })
   );
@@ -80,7 +83,7 @@ export function useTaskStore() {
           title: formData.title,
           description: formData.description,
           priority: formData.priority,
-          due_date: formData.due_date, // Salva corretamente no banco
+          due_date: formData.due_date,
           status: 'pending'
         }]);
 
@@ -91,7 +94,6 @@ export function useTaskStore() {
     }
   };
 
-  // CORREÇÃO: Função updateTask adicionada para evitar duplicação na edição
   const updateTask = async (id: string, formData: Partial<TaskFormData>) => {
     try {
       const { error } = await supabase
@@ -100,7 +102,7 @@ export function useTaskStore() {
           title: formData.title,
           description: formData.description,
           priority: formData.priority,
-          due_date: formData.due_date, // Garante que a data seja atualizada
+          due_date: formData.due_date,
           updated_at: new Date().toISOString()
         })
         .eq('id', id);
@@ -177,10 +179,12 @@ export function useTaskStore() {
     loading,
     filterStatus,
     filterPriority,
+    searchQuery,
     setFilterStatus,
     setFilterPriority,
+    setSearchQuery,
     addTask,
-    updateTask, // Exposto para o TaskFormDialog
+    updateTask,
     softDelete,
     restore,
     permanentDelete,

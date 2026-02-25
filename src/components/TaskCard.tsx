@@ -1,8 +1,10 @@
+// src/components/TaskCard.tsx
 import type { Task } from "@/types/task";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Circle, Pencil, Trash2, Calendar } from "lucide-react";
-import { format } from "date-fns";
+import { CheckCircle2, Circle, Pencil, Trash2, Calendar, AlertCircle } from "lucide-react";
+import { format, isValid } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { motion } from "framer-motion";
 
 interface Props {
   task: Task;
@@ -11,82 +13,112 @@ interface Props {
   onDelete: (id: string) => void;
 }
 
-const priorityLabel = { high: "Alta", medium: "Média", low: "Baixa" };
+const priorityConfig = {
+  high: { label: "Alta", color: "text-rose-600", bg: "bg-rose-50", dot: "bg-rose-500" },
+  medium: { label: "Média", color: "text-amber-600", bg: "bg-amber-50", dot: "bg-amber-500" },
+  low: { label: "Baixa", color: "text-emerald-600", bg: "bg-emerald-50", dot: "bg-emerald-500" }
+};
 
 export function TaskCard({ task, onToggle, onEdit, onDelete }: Props) {
   const isCompleted = task.status === "completed";
   
-  // CORREÇÃO: Usar due_date vindo do Supabase
-  const isOverdue =
+  // Tratamento seguro para data inválida
+  const dateObj = new Date(task.dueDate);
+  const isDateValid = isValid(dateObj);
+  
+  const isOverdue = 
     !isCompleted && 
-    task.due_date && 
-    new Date(task.due_date) < new Date(new Date().toDateString());
+    isDateValid && 
+    dateObj < new Date(new Date().toDateString());
+
+  const config = priorityConfig[task.priority];
 
   return (
-    <div
-      className={`group rounded-lg border bg-card p-4 transition-all hover:shadow-md ${
-        isCompleted ? "opacity-60" : ""
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      whileHover={{ scale: 1.01 }}
+      className={`group relative overflow-hidden rounded-xl border bg-white p-4 shadow-sm transition-all hover:shadow-md ${
+        isCompleted ? "border-emerald-100 bg-emerald-50/20" : "border-slate-200"
       }`}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-4">
+        {/* Botão Check Animado */}
         <button
           onClick={() => onToggle(task.id)}
-          className="mt-0.5 shrink-0 transition-colors"
+          className="mt-1 shrink-0 transition-transform active:scale-90"
         >
           {isCompleted ? (
-            <CheckCircle2 className="h-5 w-5 text-success" />
+            <CheckCircle2 className="h-6 w-6 text-emerald-500 fill-emerald-50" />
           ) : (
-            <Circle className="h-5 w-5 text-muted-foreground hover:text-foreground" />
+            <Circle className="h-6 w-6 text-slate-300 hover:text-violet-500 transition-colors" />
           )}
         </button>
+
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3
-              className={`font-medium leading-tight ${
-                isCompleted ? "line-through text-muted-foreground" : ""
-              }`}
-            >
+          <div className="flex items-center gap-3 flex-wrap">
+            <h3 className={`font-semibold text-slate-800 transition-all ${
+              isCompleted ? "line-through text-slate-400 opacity-70" : ""
+            }`}>
               {task.title}
             </h3>
-            <span
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium priority-${task.priority}`}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full priority-dot-${task.priority}`} />
-              {priorityLabel[task.priority]}
+            
+            {/* Indicador de Prioridade */}
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${config.bg} ${config.color}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${config.dot} animate-pulse`} />
+              {config.label}
             </span>
           </div>
+
           {task.description && (
-            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+            <p className={`text-sm mt-1 line-clamp-2 transition-all ${
+              isCompleted ? "text-slate-400" : "text-slate-600"
+            }`}>
               {task.description}
             </p>
           )}
-          <div className="flex items-center gap-1 mt-2">
-            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-            <span
-              className={`text-xs font-mono ${
-                isOverdue ? "text-destructive font-semibold" : "text-muted-foreground"
-              }`}
-            >
-              {/* CORREÇÃO: Renderização segura do campo due_date */}
-              {task.due_date ? format(new Date(task.due_date), "dd MMM yyyy", { locale: ptBR }) : "Sem data"}
-              {isOverdue && " — Atrasada"}
-            </span>
+
+          {/* Rodapé do Card com Data Segura */}
+          <div className="flex items-center gap-4 mt-3">
+            <div className={`flex items-center gap-1.5 text-xs font-medium ${
+              isOverdue ? "text-rose-600" : "text-slate-400"
+            }`}>
+              <Calendar className="h-3.5 w-3.5" />
+              <span>
+                {isDateValid 
+                  ? format(dateObj, "dd 'de' MMM", { locale: ptBR })
+                  : "Data não definida"}
+              </span>
+              {isOverdue && (
+                <span className="flex items-center gap-1 ml-1 animate-bounce">
+                   <AlertCircle className="h-3 w-3" /> Atrasada
+                </span>
+              )}
+            </div>
           </div>
         </div>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit(task)}>
+
+        {/* Ações (Hover) */}
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
+          <Button size="icon" variant="ghost" className="h-9 w-9 rounded-full hover:bg-violet-50 hover:text-violet-600" onClick={() => onEdit(task)}>
             <Pencil className="h-4 w-4" />
           </Button>
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 text-destructive hover:text-destructive"
+            className="h-9 w-9 rounded-full text-slate-400 hover:bg-rose-50 hover:text-rose-600"
             onClick={() => onDelete(task.id)}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </div>
-    </div>
+      
+      {/* Detalhe Visual Lateral */}
+      {task.priority === "high" && !isCompleted && (
+        <div className="absolute left-0 top-0 h-full w-1 bg-rose-500" />
+      )}
+    </motion.div>
   );
 }

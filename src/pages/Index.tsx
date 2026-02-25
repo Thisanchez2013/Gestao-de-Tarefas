@@ -7,8 +7,9 @@ import { TaskCard } from "@/components/TaskCard";
 import { TaskFormDialog } from "@/components/TaskFormDialog";
 import { TrashView } from "@/components/TrashView";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input"; // Certifique-se de ter o componente Input
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, ListTodo, Moon, Sun } from "lucide-react";
+import { Plus, Trash2, ListTodo, Moon, Sun, Search } from "lucide-react";
 import type { Task } from "@/types/task";
 
 const Index = () => {
@@ -46,6 +47,17 @@ const Index = () => {
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         <Dashboard pendingCount={store.pendingCount} completedCount={store.completedCount} />
         
+        {/* Barra de Busca */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar tarefas pelo título..."
+            className="pl-10"
+            value={store.searchQuery}
+            onChange={(e) => store.setSearchQuery(e.target.value)}
+          />
+        </div>
+
         <div className="flex gap-4 border-b">
           <button onClick={() => setTab("tasks")} className={`pb-2 ${tab === "tasks" ? "border-b-2 border-primary font-bold" : ""}`}>
             Ativas
@@ -67,6 +79,11 @@ const Index = () => {
               {store.tasks.map(task => (
                 <TaskCard key={task.id} task={task} onEdit={handleEdit} onToggle={store.toggleStatus} onDelete={store.softDelete} />
               ))}
+              {store.tasks.length === 0 && (
+                <p className="text-center text-muted-foreground py-10">
+                  {store.searchQuery ? "Nenhuma tarefa encontrada para esta busca." : "Nenhuma tarefa pendente."}
+                </p>
+              )}
             </div>
           </>
         ) : (
