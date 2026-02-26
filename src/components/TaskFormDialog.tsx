@@ -1,3 +1,4 @@
+// src/components/TaskFormDialog.tsx
 import { useState, useEffect } from "react";
 import type { Task, TaskFormData, Priority } from "@/types/task";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useTaskStore } from "@/hooks/useTaskStore";
+import { MapPin } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -34,27 +37,33 @@ function getTodayStr() {
 
 export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdate }: Props) {
   const { toast } = useToast();
+  const { suppliers } = useTaskStore(); // Acessando a lista global de fornecedores
   const isEditing = !!editTask;
 
+  // Estados do formulário
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState(getTodayStr());
   const [priority, setPriority] = useState<Priority>("medium");
+  const [supplierId, setSupplierId] = useState<string>("none"); 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Sincroniza os campos quando o modal abre ou o editTask muda
   useEffect(() => {
     if (open) {
       if (editTask) {
         setTitle(editTask.title || "");
         setDescription(editTask.description || "");
-        // CORREÇÃO: Usar due_date para carregar a data no modal de edição
         setDueDate(editTask.due_date ? editTask.due_date.split("T")[0] : getTodayStr());
         setPriority(editTask.priority || "medium");
+        // Se a tarefa tiver um supplier_id, define no estado, caso contrário "none"
+        setSupplierId(editTask.supplier_id || "none");
       } else {
         setTitle("");
         setDescription("");
         setDueDate(getTodayStr());
         setPriority("medium");
+        setSupplierId("none");
       }
       setErrors({});
     }
@@ -66,7 +75,6 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
     const selectedDate = new Date(dueDate + "T12:00:00");
     if (selectedDate < today) errs.dueDate = "A data não pode ser retroativa.";
     
@@ -82,15 +90,15 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
     const data: TaskFormData = {
       title: title.trim(),
       description: description.trim(),
-      // CORREÇÃO: Salvar como due_date para alinhar com o banco de dados
       due_date: dateISO,
-      status: editTask?.status ?? "pending",
       priority,
+      // Se for "none", enviamos null ou undefined para o banco
+      supplier_id: supplierId === "none" ? undefined : supplierId,
     };
 
     if (isEditing && onUpdate && editTask) {
       onUpdate(editTask.id, data);
-      toast({ title: "Tarefa atualizada com sucesso!" });
+      toast({ title: "Tarefa atualizada!" });
     } else {
       onSubmit(data);
       toast({ title: "Tarefa criada com sucesso!" });
@@ -106,28 +114,57 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
           <DialogTitle>{isEditing ? "Editar Tarefa" : "Nova Tarefa"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          <div>
+          {/* Título */}
+          <div className="space-y-1">
             <Label htmlFor="title">Título *</Label>
             <Input 
               id="title" 
               value={title} 
               onChange={(e) => setTitle(e.target.value)} 
-              placeholder="Ex: Estudar React"
+              placeholder="Ex: Comprar suprimentos"
             />
-            {errors.title && <p className="text-sm text-destructive mt-1">{errors.title}</p>}
+            {errors.title && <p className="text-xs text-destructive font-medium">{errors.title}</p>}
           </div>
-          <div>
+
+          {/* Descrição */}
+          <div className="space-y-1">
             <Label htmlFor="desc">Descrição</Label>
             <Textarea 
               id="desc" 
               value={description} 
               onChange={(e) => setDescription(e.target.value)} 
               placeholder="Detalhes opcionais..."
+              className="resize-none"
             />
           </div>
+
+          {/* Seleção de Fornecedor */}
+          <div className="space-y-1">
+            <Label>Fornecedor vinculado</Label>
+            <Select value={supplierId} onValueChange={setSupplierId}>
+              <SelectTrigger className="w-full bg-background">
+                <SelectValue placeholder="Selecione um parceiro" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem fornecedor vinculado</SelectItem>
+                {suppliers.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium">{s.name}</span>
+                      <span className="text-[10px] opacity-70 flex items-center gap-1">
+                        <MapPin className="h-2.5 w-2.5" /> {s.location_name}
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="due">Data de Vencimento</Label>
+            {/* Data de Vencimento */}
+            <div className="space-y-1">
+              <Label htmlFor="due">Vencimento</Label>
               <Input 
                 id="due" 
                 type="date" 
@@ -135,9 +172,11 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
                 onChange={(e) => setDueDate(e.target.value)} 
                 className="font-mono text-sm"
               />
-              {errors.dueDate && <p className="text-sm text-destructive mt-1">{errors.dueDate}</p>}
+              {errors.dueDate && <p className="text-xs text-destructive font-medium">{errors.dueDate}</p>}
             </div>
-            <div>
+            
+            {/* Prioridade */}
+            <div className="space-y-1">
               <Label>Prioridade</Label>
               <Select value={priority} onValueChange={(v) => setPriority(v as Priority)}>
                 <SelectTrigger>
@@ -152,11 +191,12 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
             </div>
           </div>
         </div>
-        <DialogFooter>
+
+        <DialogFooter className="gap-2 sm:gap-0 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit}>
+          <Button onClick={handleSubmit} className="bg-primary">
             {isEditing ? "Salvar Alterações" : "Criar Tarefa"}
           </Button>
         </DialogFooter>

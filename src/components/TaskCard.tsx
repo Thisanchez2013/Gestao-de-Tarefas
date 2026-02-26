@@ -1,15 +1,25 @@
 // src/components/TaskCard.tsx
-import type { Task } from "@/types/task";
+import type { TaskWithSupplier } from "@/types/task";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Circle, Pencil, Trash2, Calendar, AlertCircle } from "lucide-react";
+import { 
+  CheckCircle2, 
+  Circle, 
+  Pencil, 
+  Trash2, 
+  Calendar, 
+  AlertCircle, 
+  MapPin, 
+  Phone, 
+  MessageSquare 
+} from "lucide-react";
 import { format, isValid } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { motion } from "framer-motion";
 
 interface Props {
-  task: Task;
+  task: TaskWithSupplier; // Atualizado para suportar dados do fornecedor
   onToggle: (id: string) => void;
-  onEdit: (task: Task) => void;
+  onEdit: (task: TaskWithSupplier) => void;
   onDelete: (id: string) => void;
 }
 
@@ -21,9 +31,10 @@ const priorityConfig = {
 
 export function TaskCard({ task, onToggle, onEdit, onDelete }: Props) {
   const isCompleted = task.status === "completed";
+  const { supplier } = task;
   
-  // Tratamento seguro para data inválida
-  const dateObj = new Date(task.dueDate);
+  // Tratamento seguro para data (utilizando due_date com underline conforme sua atualização)
+  const dateObj = new Date(task.due_date);
   const isDateValid = isValid(dateObj);
   
   const isOverdue = 
@@ -32,6 +43,11 @@ export function TaskCard({ task, onToggle, onEdit, onDelete }: Props) {
     dateObj < new Date(new Date().toDateString());
 
   const config = priorityConfig[task.priority];
+
+  const handleWhatsApp = (phoneNumber: string) => {
+    const cleanNumber = phoneNumber.replace(/\D/g, "");
+    window.open(`https://wa.me/${cleanNumber}`, "_blank");
+  };
 
   return (
     <motion.div
@@ -44,7 +60,7 @@ export function TaskCard({ task, onToggle, onEdit, onDelete }: Props) {
       }`}
     >
       <div className="flex items-start gap-4">
-        {/* Botão Check Animado */}
+        {/* Botão Check */}
         <button
           onClick={() => onToggle(task.id)}
           className="mt-1 shrink-0 transition-transform active:scale-90"
@@ -64,7 +80,6 @@ export function TaskCard({ task, onToggle, onEdit, onDelete }: Props) {
               {task.title}
             </h3>
             
-            {/* Indicador de Prioridade */}
             <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${config.bg} ${config.color}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${config.dot} animate-pulse`} />
               {config.label}
@@ -79,7 +94,35 @@ export function TaskCard({ task, onToggle, onEdit, onDelete }: Props) {
             </p>
           )}
 
-          {/* Rodapé do Card com Data Segura */}
+          {/* Seção de Fornecedor (Nova) */}
+          {supplier && (
+            <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-violet-600">
+                <MapPin className="h-3.5 w-3.5" />
+                <span>{supplier.location_name} • {supplier.name}</span>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <a 
+                  href={`tel:${supplier.phone}`}
+                  className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-violet-600 transition-colors"
+                >
+                  <Phone className="h-3.5 w-3.5" />
+                  {supplier.phone}
+                </a>
+                
+                <button 
+                  onClick={() => handleWhatsApp(supplier.phone)}
+                  className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  WhatsApp
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Rodapé do Card */}
           <div className="flex items-center gap-4 mt-3">
             <div className={`flex items-center gap-1.5 text-xs font-medium ${
               isOverdue ? "text-rose-600" : "text-slate-400"
@@ -115,7 +158,7 @@ export function TaskCard({ task, onToggle, onEdit, onDelete }: Props) {
         </div>
       </div>
       
-      {/* Detalhe Visual Lateral */}
+      {/* Detalhe Lateral de Prioridade */}
       {task.priority === "high" && !isCompleted && (
         <div className="absolute left-0 top-0 h-full w-1 bg-rose-500" />
       )}

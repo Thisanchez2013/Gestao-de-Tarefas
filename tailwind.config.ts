@@ -2,7 +2,12 @@ import type { Config } from "tailwindcss";
 
 export default {
   darkMode: ["class"],
-  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
+  content: [
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
+  ],
   prefix: "",
   theme: {
     container: {
@@ -51,6 +56,7 @@ export default {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
         },
+        // Cores de prioridade para manter a harmonia no dashboard
         priority: {
           high: "hsl(var(--priority-high))",
           medium: "hsl(var(--priority-medium))",
@@ -77,25 +83,38 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+        // Refinamento da animação para um movimento mais "Elite"
+        "bounce-slow": {
+          "0%, 100%": {
+            transform: "translateY(-8%)",
+            animationTimingFunction: "ease-in-out",
           },
-          to: {
-            height: "0",
+          "50%": {
+            transform: "translateY(0)",
+            animationTimingFunction: "ease-in-out",
           },
         },
+        // Sutil pulsação de opacidade para elementos de fundo
+        "pulse-soft": {
+          "0%, 100%": { opacity: "0.1" },
+          "50%": { opacity: "0.15" },
+        }
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "bounce-slow": "bounce-slow 4s infinite", // Aumentado para 4s para ser ainda mais suave
+        "pulse-soft": "pulse-soft 6s infinite",
+      },
+      blur: {
+        "120px": "120px",
       },
     },
   },

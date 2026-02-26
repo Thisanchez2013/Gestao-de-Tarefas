@@ -1,20 +1,34 @@
+// src/types/task.ts
+import { Supplier } from "./supplier";
+
 export type Priority = "high" | "medium" | "low";
 export type Status = "pending" | "completed";
 
-// src/types/task.ts
 export interface Task {
   id: string;
   title: string;
   description?: string;
-  status: 'pending' | 'completed';
-  priority: 'low' | 'medium' | 'high';
-  due_date: string;    // Verifique se tem o underline _
-  created_at: string;  // Verifique se tem o underline _
+  status: Status;
+  priority: Priority;
+  due_date: string;    // ISO string
+  supplier_id?: string; // FK para a entidade Supplier
+  created_at: string;
   updated_at: string;
   deleted_at: string | null;
 }
 
-export type TaskFormData = Pick<Task, 'title' | 'description' | 'priority' | 'due_date'>;
+/**
+ * TaskFormData define os dados necessários para criar ou editar uma tarefa.
+ * Omitimos campos gerados automaticamente pelo sistema (id, datas de controle).
+ */
+export type TaskFormData = Pick<Task, 'title' | 'description' | 'priority' | 'due_date' | 'supplier_id'>;
 
 export type FilterStatus = "all" | Status;
 export type FilterPriority = "all" | Priority;
+
+/**
+ * Interface auxiliar para quando buscamos a tarefa populada com os dados do fornecedor
+ */
+export interface TaskWithSupplier extends Task {
+  supplier?: Supplier;
+}
