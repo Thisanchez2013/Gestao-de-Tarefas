@@ -11,6 +11,7 @@ import {
   MapPin,
   Phone,
   MessageSquare,
+  ChevronRight,
 } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -21,6 +22,7 @@ interface Props {
   onToggle: (id: string) => void;
   onEdit: (task: TaskWithSupplier) => void;
   onDelete: (id: string) => void;
+  onOpen: (task: TaskWithSupplier) => void;
 }
 
 const priorityConfig = {
@@ -30,7 +32,6 @@ const priorityConfig = {
     bgColor: "bg-rose-50",
     dot: "bg-rose-500",
     border: "border-l-rose-500",
-    ring: "ring-rose-100",
   },
   medium: {
     label: "Média",
@@ -38,7 +39,6 @@ const priorityConfig = {
     bgColor: "bg-amber-50",
     dot: "bg-amber-400",
     border: "border-l-amber-400",
-    ring: "ring-amber-100",
   },
   low: {
     label: "Baixa",
@@ -46,11 +46,10 @@ const priorityConfig = {
     bgColor: "bg-emerald-50",
     dot: "bg-emerald-500",
     border: "border-l-emerald-500",
-    ring: "ring-emerald-100",
   },
 };
 
-export function TaskCard({ task, onToggle, onEdit, onDelete }: Props) {
+export function TaskCard({ task, onToggle, onEdit, onDelete, onOpen }: Props) {
   const isCompleted = task.status === "completed";
   const { supplier } = task;
   const config = priorityConfig[task.priority];
@@ -63,8 +62,7 @@ export function TaskCard({ task, onToggle, onEdit, onDelete }: Props) {
     dateObj < new Date(new Date().toDateString());
 
   const handleWhatsApp = (phoneNumber: string) => {
-    const cleanNumber = phoneNumber.replace(/\D/g, "");
-    window.open(`https://wa.me/${cleanNumber}`, "_blank");
+    window.open(`https://wa.me/${phoneNumber.replace(/\D/g, "")}`, "_blank");
   };
 
   return (
@@ -77,148 +75,131 @@ export function TaskCard({ task, onToggle, onEdit, onDelete }: Props) {
       className={`
         group relative overflow-hidden
         rounded-xl border-l-[3px] border border-border bg-card
-        px-4 py-3.5 shadow-sm
-        transition-shadow hover:shadow-md
+        shadow-sm transition-shadow hover:shadow-md
         ${config.border}
         ${isCompleted ? "opacity-70" : ""}
       `}
     >
-      <div className="flex items-start gap-3">
-        {/* Checkbox */}
-        <button
-          onClick={() => onToggle(task.id)}
-          className="mt-0.5 shrink-0 transition-transform active:scale-90 focus:outline-none"
-          aria-label={isCompleted ? "Marcar como pendente" : "Marcar como concluída"}
-        >
-          <AnimatePresence mode="wait" initial={false}>
-            {isCompleted ? (
-              <motion.div
-                key="checked"
-                initial={{ scale: 0.6, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.6, opacity: 0 }}
-                transition={{ duration: 0.15 }}
-              >
-                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="unchecked"
-                initial={{ scale: 0.6, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.6, opacity: 0 }}
-                transition={{ duration: 0.15 }}
-              >
-                <Circle className="h-5 w-5 text-muted-foreground/40 hover:text-primary transition-colors" />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </button>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          {/* Title + Priority badge */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3
-              className={`font-semibold text-sm leading-snug transition-all ${
-                isCompleted
-                  ? "line-through text-muted-foreground"
-                  : "text-foreground"
-              }`}
-            >
-              {task.title}
-            </h3>
-
-            <span
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${config.bgColor} ${config.textColor}`}
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
-              {config.label}
-            </span>
-
-            {isOverdue && (
-              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-rose-50 text-rose-600">
-                <AlertCircle className="h-3 w-3" />
-                Atrasada
-              </span>
-            )}
+      {/* Área clicável principal — abre o modal de detalhe */}
+      <button
+        onClick={() => onOpen(task)}
+        className="w-full text-left px-4 py-3.5 focus:outline-none"
+      >
+        <div className="flex items-start gap-3">
+          {/* Checkbox — clique isolado, não propaga pro botão pai */}
+          <div
+            onClick={(e) => { e.stopPropagation(); onToggle(task.id); }}
+            className="mt-0.5 shrink-0 cursor-pointer transition-transform active:scale-90"
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {isCompleted ? (
+                <motion.div
+                  key="checked"
+                  initial={{ scale: 0.6, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.6, opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="unchecked"
+                  initial={{ scale: 0.6, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.6, opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <Circle className="h-5 w-5 text-muted-foreground/30 group-hover:text-primary/50 transition-colors" />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
-          {/* Description */}
-          {task.description && (
-            <p
-              className={`text-xs mt-1 line-clamp-2 leading-relaxed ${
-                isCompleted ? "text-muted-foreground/60" : "text-muted-foreground"
-              }`}
-            >
-              {task.description}
-            </p>
-          )}
+          {/* Conteúdo */}
+          <div className="flex-1 min-w-0">
+            {/* Título + badges */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3
+                className={`font-semibold text-sm leading-snug transition-all ${
+                  isCompleted ? "line-through text-muted-foreground" : "text-foreground"
+                }`}
+              >
+                {task.title}
+              </h3>
 
-          {/* Supplier section */}
-          {supplier && (
-            <div className="mt-2.5 flex flex-wrap items-center gap-3 pt-2.5 border-t border-border/60">
-              <span className="flex items-center gap-1.5 text-[11px] font-semibold text-primary">
-                <MapPin className="h-3 w-3" />
-                {supplier.location_name} · {supplier.name}
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${config.bgColor} ${config.textColor}`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
+                {config.label}
               </span>
 
-              <a
-                href={`tel:${supplier.phone}`}
-                className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Phone className="h-3 w-3" />
-                {supplier.phone}
-              </a>
-
-              <button
-                onClick={() => handleWhatsApp(supplier.phone)}
-                className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
-              >
-                <MessageSquare className="h-3 w-3" />
-                WhatsApp
-              </button>
+              {isOverdue && (
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-rose-50 text-rose-600">
+                  <AlertCircle className="h-3 w-3" />
+                  Atrasada
+                </span>
+              )}
             </div>
-          )}
 
-          {/* Due date */}
-          <div className="flex items-center gap-1.5 mt-2">
-            <Calendar
-              className={`h-3 w-3 ${isOverdue ? "text-rose-500" : "text-muted-foreground/60"}`}
-            />
-            <span
-              className={`text-[11px] font-medium ${
-                isOverdue ? "text-rose-500" : "text-muted-foreground/70"
-              }`}
-            >
-              {isDateValid
-                ? format(dateObj, "dd 'de' MMM, yyyy", { locale: ptBR })
-                : "Sem data definida"}
-            </span>
+            {/* Descrição — preview truncado */}
+            {task.description && (
+              <p
+                className={`text-xs mt-1 line-clamp-1 leading-relaxed ${
+                  isCompleted ? "text-muted-foreground/60" : "text-muted-foreground"
+                }`}
+              >
+                {task.description}
+              </p>
+            )}
+
+            {/* Fornecedor resumido */}
+            {supplier && (
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <MapPin className="h-3 w-3 text-primary/60 shrink-0" />
+                <span className="text-[11px] font-medium text-primary/80 truncate">
+                  {supplier.name} · {supplier.location_name}
+                </span>
+              </div>
+            )}
+
+            {/* Data */}
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <Calendar className={`h-3 w-3 shrink-0 ${isOverdue ? "text-rose-500" : "text-muted-foreground/50"}`} />
+              <span className={`text-[11px] font-medium ${isOverdue ? "text-rose-500" : "text-muted-foreground/60"}`}>
+                {isDateValid
+                  ? format(dateObj, "dd 'de' MMM, yyyy", { locale: ptBR })
+                  : "Sem data"}
+              </span>
+            </div>
           </div>
-        </div>
 
-        {/* Action buttons — visible on hover */}
-        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0 shrink-0">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 rounded-lg hover:bg-primary/10 hover:text-primary"
-            onClick={() => onEdit(task)}
-            aria-label="Editar tarefa"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 rounded-lg hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => onDelete(task.id)}
-            aria-label="Mover para lixeira"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          {/* Seta indicando que é clicável */}
+          <ChevronRight className="h-4 w-4 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors shrink-0 mt-0.5" />
         </div>
+      </button>
+
+      {/* Botões de ação rápida — aparecem no hover, fora da área clicável */}
+      <div className="absolute right-8 top-1/2 -translate-y-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0 bg-card/95 backdrop-blur-sm rounded-lg p-0.5 shadow-sm border border-border/60">
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7 rounded-md hover:bg-primary/10 hover:text-primary"
+          onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+          aria-label="Editar tarefa"
+        >
+          <Pencil className="h-3 w-3" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7 rounded-md hover:bg-destructive/10 hover:text-destructive"
+          onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
+          aria-label="Mover para lixeira"
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
       </div>
     </motion.div>
   );

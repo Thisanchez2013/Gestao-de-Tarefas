@@ -53,8 +53,8 @@ export function TrashView({ tasks, onRestore, onPermanentDelete }: Props) {
               </p>
               <p className="text-xs text-muted-foreground/60 font-mono mt-0.5">
                 Excluída em{" "}
-                {task.deletedAt
-                  ? format(new Date(task.deletedAt), "dd MMM yyyy", { locale: ptBR })
+                {task.deleted_at
+                  ? format(new Date(task.deleted_at), "dd MMM yyyy", { locale: ptBR })
                   : "—"}
               </p>
             </div>

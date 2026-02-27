@@ -9,6 +9,7 @@ import { TaskFormDialog } from "@/components/TaskFormDialog";
 import { SupplierFormDialog } from "@/components/supplier/SupplierFormDialog";
 import { SupplierListView } from "@/components/supplier/SupplierListView";
 import { TrashView } from "@/components/TrashView";
+import { TaskDetailModal } from "@/components/TaskDetailModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -41,6 +42,8 @@ const Index = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [supplierFormOpen, setSupplierFormOpen] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
+  const [detailTask, setDetailTask] = useState<Task | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -56,6 +59,11 @@ const Index = () => {
   const handleEdit = (task: Task) => {
     setEditTask(task);
     setFormOpen(true);
+  };
+
+  const handleOpen = (task: Task) => {
+    setDetailTask(task);
+    setDetailOpen(true);
   };
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode; count?: number }[] = [
@@ -221,6 +229,7 @@ const Index = () => {
                       onEdit={handleEdit}
                       onToggle={store.toggleStatus}
                       onDelete={store.softDelete}
+                      onOpen={handleOpen}
                     />
                   ))}
                 </div>
@@ -283,6 +292,18 @@ const Index = () => {
       <SupplierFormDialog
         open={supplierFormOpen}
         onOpenChange={setSupplierFormOpen}
+      />
+
+      <TaskDetailModal
+        task={detailTask ? store.suppliers
+          ? { ...detailTask, supplier: store.suppliers.find(s => s.id === detailTask.supplier_id) }
+          : detailTask
+        : null}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onToggle={store.toggleStatus}
+        onEdit={handleEdit}
+        onDelete={store.softDelete}
       />
     </div>
   );

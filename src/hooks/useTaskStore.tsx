@@ -4,9 +4,7 @@ import type { Task, TaskFormData, FilterStatus, FilterPriority, TaskWithSupplier
 import type { Supplier, SupplierFormData } from "@/types/supplier";
 import { useToast } from "@/hooks/use-toast";
 
-// Interface para o Contexto
 type TaskStoreContextType = ReturnType<typeof useTaskStoreLogic>;
-
 const TaskStoreContext = createContext<TaskStoreContextType | null>(null);
 
 const priorityOrder = { high: 0, medium: 1, low: 2 };
@@ -53,10 +51,7 @@ function useTaskStoreLogic() {
     fetchData();
 
     const channel = supabase.channel('db-updates')
-      // Tarefas: re-fetch em todos os eventos
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => fetchData())
-      // Fornecedores: re-fetch apenas em INSERT e DELETE
-      // UPDATE é tratado localmente via setSuppliers para resposta imediata (sem race condition)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'suppliers' }, () => fetchData())
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'suppliers' }, () => fetchData())
       .subscribe();
@@ -83,27 +78,17 @@ function useTaskStoreLogic() {
 
   const updateSupplier = async (id: string, formData: Partial<SupplierFormData>) => {
     try {
-      // 1. Atualização otimista: reflete na UI imediatamente, sem esperar o banco
       setSuppliers(prev => prev.map(s => s.id === id ? { ...s, ...formData } : s));
-
-      // 2. Persiste no banco e recupera o dado confirmado
       const { data, error } = await supabase
         .from('suppliers')
         .update(formData)
         .eq('id', id)
-        .select()   // retorna o registro atualizado
-        .single();  // retorna como objeto único
-
+        .select()
+        .single();
       if (error) throw error;
-
-      // 3. Confirma o estado com o dado real retornado pelo banco
-      if (data) {
-        setSuppliers(prev => prev.map(s => s.id === id ? data : s));
-      }
-
+      if (data) setSuppliers(prev => prev.map(s => s.id === id ? data : s));
       toast({ title: "Fornecedor atualizado!" });
     } catch (error: any) {
-      // Rollback: em caso de erro, rebusca os dados reais do banco
       fetchData();
       toast({ variant: "destructive", title: "Erro", description: error.message });
     }
@@ -155,14 +140,65 @@ function useTaskStoreLogic() {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
     const newStatus = task.status === "pending" ? "completed" : "pending";
+    // Otimista
     setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
-    await supabase
+    const { error } = await supabase
       .from('tasks')
       .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', id);
+    if (error) {
+      // Rollback
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, status: task.status } : t));
+      toast({ variant: "destructive", title: "Erro ao atualizar status", description: error.message });
+    }
   };
 
-  // --- DERIVADOS (Memoized) ---
+  // Move para lixeira — soft delete via deleted_at
+  const softDelete = async (id: string) => {
+    const deletedAt = new Date().toISOString();
+    // Otimista
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, deleted_at: deletedAt } : t));
+    const { error } = await supabase
+      .from('tasks')
+      .update({ deleted_at: deletedAt })
+      .eq('id', id);
+    if (error) {
+      // Rollback
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, deleted_at: null } : t));
+      toast({ variant: "destructive", title: "Erro ao mover para lixeira", description: error.message });
+    } else {
+      toast({ title: "Movido para a lixeira" });
+    }
+  };
+
+  // Restaura da lixeira
+  const restore = async (id: string) => {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, deleted_at: null } : t));
+    const { error } = await supabase
+      .from('tasks')
+      .update({ deleted_at: null })
+      .eq('id', id);
+    if (error) {
+      fetchData();
+      toast({ variant: "destructive", title: "Erro ao restaurar", description: error.message });
+    } else {
+      toast({ title: "Tarefa restaurada!" });
+    }
+  };
+
+  // Exclui permanentemente
+  const permanentDelete = async (id: string) => {
+    setTasks(prev => prev.filter(t => t.id !== id));
+    const { error } = await supabase.from('tasks').delete().eq('id', id);
+    if (error) {
+      fetchData();
+      toast({ variant: "destructive", title: "Erro ao excluir", description: error.message });
+    } else {
+      toast({ title: "Tarefa excluída permanentemente." });
+    }
+  };
+
+  // --- DERIVADOS ---
   const tasksWithSuppliers = useMemo(() => {
     return tasks.map(task => ({
       ...task,
@@ -199,6 +235,9 @@ function useTaskStoreLogic() {
     deleteSupplier,
     updateTask,
     toggleStatus,
+    softDelete,
+    restore,
+    permanentDelete,
     pendingCount: activeTasks.filter(t => t.status === 'pending').length,
     completedCount: activeTasks.filter(t => t.status === 'completed').length,
   };
