@@ -51,19 +51,28 @@ function useTaskStoreLogic() {
 
   useEffect(() => {
     fetchData();
+
     const channel = supabase.channel('db-updates')
+      // Tarefas: re-fetch em todos os eventos
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'suppliers' }, () => fetchData())
+      // Fornecedores: re-fetch apenas em INSERT e DELETE
+      // UPDATE é tratado localmente via setSuppliers para resposta imediata (sem race condition)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'suppliers' }, () => fetchData())
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'suppliers' }, () => fetchData())
       .subscribe();
+
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
 
-  // --- FORNECEDORES (Sincronização Local Instantânea) ---
+  // --- FORNECEDORES ---
   const addSupplier = async (formData: SupplierFormData) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data, error } = await supabase.from('suppliers')
-        .insert([{ ...formData, user_id: user?.id }]).select().single();
+      const { data, error } = await supabase
+        .from('suppliers')
+        .insert([{ ...formData, user_id: user?.id }])
+        .select()
+        .single();
       if (error) throw error;
       if (data) setSuppliers(prev => [...prev, data]);
       toast({ title: "Fornecedor cadastrado!" });
@@ -74,11 +83,38 @@ function useTaskStoreLogic() {
 
   const updateSupplier = async (id: string, formData: Partial<SupplierFormData>) => {
     try {
-      const { error } = await supabase.from('suppliers').update(formData).eq('id', id);
-      if (error) throw error;
-      // Atualização funcional força o React a re-renderizar todos os componentes que usam o store
+      // 1. Atualização otimista: reflete na UI imediatamente, sem esperar o banco
       setSuppliers(prev => prev.map(s => s.id === id ? { ...s, ...formData } : s));
+
+      // 2. Persiste no banco e recupera o dado confirmado
+      const { data, error } = await supabase
+        .from('suppliers')
+        .update(formData)
+        .eq('id', id)
+        .select()   // retorna o registro atualizado
+        .single();  // retorna como objeto único
+
+      if (error) throw error;
+
+      // 3. Confirma o estado com o dado real retornado pelo banco
+      if (data) {
+        setSuppliers(prev => prev.map(s => s.id === id ? data : s));
+      }
+
       toast({ title: "Fornecedor atualizado!" });
+    } catch (error: any) {
+      // Rollback: em caso de erro, rebusca os dados reais do banco
+      fetchData();
+      toast({ variant: "destructive", title: "Erro", description: error.message });
+    }
+  };
+
+  const deleteSupplier = async (id: string) => {
+    try {
+      const { error } = await supabase.from('suppliers').delete().eq('id', id);
+      if (error) throw error;
+      setSuppliers(prev => prev.filter(s => s.id !== id));
+      toast({ title: "Fornecedor removido!" });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
     }
@@ -88,8 +124,11 @@ function useTaskStoreLogic() {
   const addTask = async (formData: TaskFormData) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data, error } = await supabase.from('tasks')
-        .insert([{ ...formData, status: 'pending', user_id: user?.id }]).select().single();
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert([{ ...formData, status: 'pending', user_id: user?.id }])
+        .select()
+        .single();
       if (error) throw error;
       if (data) setTasks(prev => [...prev, data]);
       toast({ title: "Tarefa adicionada!" });
@@ -100,7 +139,10 @@ function useTaskStoreLogic() {
 
   const updateTask = async (id: string, formData: Partial<TaskFormData>) => {
     try {
-      const { error } = await supabase.from('tasks').update({ ...formData, updated_at: new Date().toISOString() }).eq('id', id);
+      const { error } = await supabase
+        .from('tasks')
+        .update({ ...formData, updated_at: new Date().toISOString() })
+        .eq('id', id);
       if (error) throw error;
       setTasks(prev => prev.map(t => t.id === id ? { ...t, ...formData, updated_at: new Date().toISOString() } : t));
       toast({ title: "Tarefa atualizada!" });
@@ -114,7 +156,10 @@ function useTaskStoreLogic() {
     if (!task) return;
     const newStatus = task.status === "pending" ? "completed" : "pending";
     setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
-    await supabase.from('tasks').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', id);
+    await supabase
+      .from('tasks')
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', id);
   };
 
   // --- DERIVADOS (Memoized) ---
@@ -151,6 +196,7 @@ function useTaskStoreLogic() {
     addTask,
     addSupplier,
     updateSupplier,
+    deleteSupplier,
     updateTask,
     toggleStatus,
     pendingCount: activeTasks.filter(t => t.status === 'pending').length,
