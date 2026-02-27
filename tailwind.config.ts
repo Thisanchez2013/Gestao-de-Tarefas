@@ -13,11 +13,13 @@ export default {
     container: {
       center: true,
       padding: "2rem",
-      screens: {
-        "2xl": "1400px",
-      },
+      screens: { "2xl": "1400px" },
     },
     extend: {
+      fontFamily: {
+        sans: ["'Plus Jakarta Sans'", "sans-serif"],
+        mono: ["'DM Mono'", "monospace"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -56,7 +58,6 @@ export default {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
         },
-        // Cores de prioridade para manter a harmonia no dashboard
         priority: {
           high: "hsl(var(--priority-high))",
           medium: "hsl(var(--priority-medium))",
@@ -90,31 +91,30 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
-        // Refinamento da animação para um movimento mais "Elite"
         "bounce-slow": {
-          "0%, 100%": {
-            transform: "translateY(-8%)",
-            animationTimingFunction: "ease-in-out",
-          },
-          "50%": {
-            transform: "translateY(0)",
-            animationTimingFunction: "ease-in-out",
-          },
+          "0%, 100%": { transform: "translateY(-6%)", animationTimingFunction: "ease-in-out" },
+          "50%": { transform: "translateY(0)", animationTimingFunction: "ease-in-out" },
         },
-        // Sutil pulsação de opacidade para elementos de fundo
         "pulse-soft": {
-          "0%, 100%": { opacity: "0.1" },
-          "50%": { opacity: "0.15" },
-        }
+          "0%, 100%": { opacity: "0.08" },
+          "50%": { opacity: "0.14" },
+        },
+        "spin-slow": {
+          from: { transform: "rotate(0deg)" },
+          to: { transform: "rotate(360deg)" },
+        },
+        "count-up": {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "bounce-slow": "bounce-slow 4s infinite", // Aumentado para 4s para ser ainda mais suave
+        "bounce-slow": "bounce-slow 4s infinite",
         "pulse-soft": "pulse-soft 6s infinite",
-      },
-      blur: {
-        "120px": "120px",
+        "spin-slow": "spin-slow 12s linear infinite",
+        "count-up": "count-up 0.4s ease both",
       },
     },
   },

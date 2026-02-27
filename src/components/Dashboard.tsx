@@ -1,105 +1,165 @@
 // src/components/Dashboard.tsx
-import { CheckCircle2, Clock, Activity } from "lucide-react";
+import { CheckCircle2, Clock, TrendingUp, ListTodo } from "lucide-react";
 import { motion } from "framer-motion";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 interface Props {
   pendingCount: number;
   completedCount: number;
 }
 
+const MotionDiv = motion.div;
+
+interface StatCardProps {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  colorClass: string;
+  iconBg: string;
+  delay?: number;
+}
+
+function StatCard({ icon, label, value, colorClass, iconBg, delay = 0 }: StatCardProps) {
+  return (
+    <MotionDiv
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay, ease: "easeOut" }}
+      whileHover={{ y: -3, transition: { duration: 0.15 } }}
+      className="relative overflow-hidden rounded-2xl border bg-card p-5 shadow-sm card-hover"
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <p className={`text-xs font-semibold uppercase tracking-widest ${colorClass} opacity-80 mb-1`}>
+            {label}
+          </p>
+          <motion.p
+            key={value}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            className="text-4xl font-extrabold text-foreground tabular-nums"
+          >
+            {value}
+          </motion.p>
+        </div>
+        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${iconBg} shadow-sm`}>
+          {icon}
+        </div>
+      </div>
+    </MotionDiv>
+  );
+}
+
+const CustomTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="rounded-xl border bg-card px-3 py-2 shadow-lg text-sm font-medium">
+        <span style={{ color: payload[0].payload.color }}>{payload[0].name}</span>
+        <span className="text-foreground ml-2 font-bold">{payload[0].value}</span>
+      </div>
+    );
+  }
+  return null;
+};
+
 export function Dashboard({ pendingCount, completedCount }: Props) {
   const total = pendingCount + completedCount;
   const pct = total > 0 ? Math.round((completedCount / total) * 100) : 0;
 
+  const donutData = total > 0
+    ? [
+        { name: "Concluídas", value: completedCount, color: "#1a5276" },
+        { name: "Pendentes", value: pendingCount, color: "#f97316" },
+      ]
+    : [{ name: "Sem tarefas", value: 1, color: "#e2eaf0" }];
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
-      {/* Card Pendentes */}
-      <motion.div
-        whileHover={{ y: -4 }}
-        className="rounded-xl border border-amber-100 bg-gradient-to-br from-white to-amber-50/40 p-5 shadow-sm transition-all flex items-center gap-4"
+    <MotionDiv
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"
+    >
+      {/* Stat: Pendentes */}
+      <StatCard
+        icon={<Clock className="h-5 w-5 text-orange-600" />}
+        label="Pendentes"
+        value={pendingCount}
+        colorClass="text-orange-600"
+        iconBg="bg-orange-50"
+        delay={0}
+      />
+
+      {/* Stat: Concluídas */}
+      <StatCard
+        icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
+        label="Concluídas"
+        value={completedCount}
+        colorClass="text-emerald-600"
+        iconBg="bg-emerald-50"
+        delay={0.07}
+      />
+
+      {/* Stat: Total */}
+      <StatCard
+        icon={<ListTodo className="h-5 w-5 text-primary" />}
+        label="Total"
+        value={total}
+        colorClass="text-primary"
+        iconBg="bg-accent"
+        delay={0.14}
+      />
+
+      {/* Donut Chart Card */}
+      <MotionDiv
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.21, ease: "easeOut" }}
+        whileHover={{ y: -3, transition: { duration: 0.15 } }}
+        className="relative overflow-hidden rounded-2xl border bg-card p-5 shadow-sm card-hover flex items-center gap-4"
       >
-        <div className="rounded-lg bg-amber-500 p-3 shadow-amber-200/50 shadow-lg">
-          <Clock className="h-6 w-6 text-white" />
+        <div className="h-[68px] w-[68px] shrink-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={donutData}
+                cx="50%"
+                cy="50%"
+                innerRadius={22}
+                outerRadius={32}
+                paddingAngle={total > 0 ? 3 : 0}
+                dataKey="value"
+                strokeWidth={0}
+                startAngle={90}
+                endAngle={-270}
+              >
+                {donutData.map((entry, index) => (
+                  <Cell key={index} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomTooltip />} />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-amber-600/80">
-            Pendentes
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary opacity-80 mb-1">
+            Progresso
           </p>
-          <p className="text-3xl font-bold text-slate-800">{pendingCount}</p>
-        </div>
-      </motion.div>
-
-      {/* Card Concluídas */}
-      <motion.div
-        whileHover={{ y: -4 }}
-        className="rounded-xl border border-emerald-100 bg-gradient-to-br from-white to-emerald-50/40 p-5 shadow-sm transition-all flex items-center gap-4"
-      >
-        <div className="rounded-lg bg-emerald-500 p-3 shadow-emerald-200/50 shadow-lg">
-          <CheckCircle2 className="h-6 w-6 text-white" />
-        </div>
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-emerald-600/80">
-            Concluídas
-          </p>
-          <p className="text-3xl font-bold text-slate-800">{completedCount}</p>
-        </div>
-      </motion.div>
-
-      {/* Card Progresso - versão premium */}
-      <motion.div
-        whileHover={{ y: -4 }}
-        className="
-          relative overflow-hidden rounded-xl
-          border border-sky-100/70
-          bg-gradient-to-br from-white via-sky-50/40 to-indigo-50/40
-          p-5 shadow-sm transition-all
-        "
-      >
-        {/* Glow suave no canto */}
-        <div className="pointer-events-none absolute -top-20 -right-20 h-44 w-44 rounded-full bg-sky-400/20 blur-3xl" />
-
-        <div className="flex justify-between items-center mb-3">
-          <div className="flex items-center gap-2">
-            {/* Ícone com gradiente */}
-            <div className="p-2 rounded-lg bg-gradient-to-br from-sky-500 to-indigo-500 shadow-lg shadow-sky-200/60">
-              <Activity className="h-4 w-4 text-white" />
-            </div>
-
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-700">
-              Progresso Geral
-            </p>
-          </div>
-
-          {/* Badge do % */}
-          <span className="text-xs font-black text-sky-700 bg-sky-100/70 border border-sky-200/60 px-2.5 py-1 rounded-full">
+          <motion.p
+            key={pct}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35 }}
+            className="text-4xl font-extrabold text-foreground tabular-nums"
+          >
             {pct}%
-          </span>
+          </motion.p>
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+            {total > 0 ? `${completedCount} de ${total} concluídas` : "Nenhuma tarefa"}
+          </p>
         </div>
-
-        {/* Barra */}
-        <div className="relative w-full rounded-full h-3.5 overflow-hidden bg-slate-100 border border-sky-100">
-          {/* preenchimento */}
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${pct}%` }}
-            transition={{ duration: 0.9, ease: "easeOut" }}
-            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 shadow-[0_0_14px_rgba(56,189,248,0.35)]"
-          />
-
-          {/* “shine” por cima (faixa de brilho andando) */}
-          <motion.div
-            initial={{ x: "-40%" }}
-            animate={{ x: "140%" }}
-            transition={{ duration: 1.6, ease: "linear", repeat: Infinity }}
-            className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/35 to-transparent"
-            style={{ mixBlendMode: "overlay" }}
-          />
-        </div>
-
-        <p className="text-[10px] text-slate-500 mt-2 font-medium text-right italic">
-          {total} tarefas catalogadas
-        </p>
-      </motion.div>
-    </div>
+      </MotionDiv>
+    </MotionDiv>
   );
 }

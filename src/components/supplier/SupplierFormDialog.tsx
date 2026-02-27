@@ -84,7 +84,7 @@ export function SupplierFormDialog({ open, onOpenChange, editSupplier }: Props) 
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSubmit} className="bg-violet-600 hover:bg-violet-700 text-white font-semibold">
+          <Button onClick={handleSubmit} className="font-semibold">
             {editSupplier ? "Salvar Alterações" : "Salvar"}
           </Button>
         </DialogFooter>

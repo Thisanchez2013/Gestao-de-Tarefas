@@ -1,15 +1,17 @@
+// src/pages/Login.tsx
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { LogIn, UserPlus, Trophy, ArrowRight } from "lucide-react";
+import { LogIn, UserPlus, CheckSquare, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { motion } from "framer-motion";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const navigate = useNavigate();
@@ -17,115 +19,161 @@ export default function Login() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(false);
+    setLoading(true);
     try {
-      const { error } = isRegistering 
+      const { error } = isRegistering
         ? await supabase.auth.signUp({ email, password })
         : await supabase.auth.signInWithPassword({ email, password });
 
       if (error) throw error;
       if (isRegistering) {
-        toast({ title: "Excelência em cada detalhe", description: "Verifique seu e-mail para confirmar seu acesso." });
+        toast({
+          title: "Conta criada!",
+          description: "Verifique seu e-mail para confirmar o acesso.",
+        });
       } else {
-        toast({ title: "Bem-vindo de volta" });
+        toast({ title: "Bem-vindo de volta!" });
         navigate("/");
       }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Nota de interrupção", description: error.message });
+      toast({ variant: "destructive", title: "Erro", description: error.message });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[#fafafa] dark:bg-[#0a0a0a] transition-colors duration-500">
-      {/* Elemento de sofisticação: Linhas de grid sutis ou gradiente suave */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
+    <div className="min-h-screen w-full flex items-center justify-center bg-background relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {/* Mesh gradient top */}
+        <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-primary/8 blur-3xl" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-primary/6 blur-3xl" />
+        {/* Subtle grid */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--border)/50)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border)/50)_1px,transparent_1px)] bg-[size:48px_48px] [mask-image:radial-gradient(ellipse_80%_60%_at_50%_50%,#000_30%,transparent_100%)]" />
+      </div>
 
-      <div className="relative z-10 w-full max-w-[420px] p-6">
-        <div className="text-center mb-10 space-y-2">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm mb-4 animate-bounce-slow">
-            <Trophy className="h-7 w-7 text-zinc-800 dark:text-zinc-200" />
-          </div>
-          <h1 className="text-4xl font-extralight tracking-tighter text-zinc-900 dark:text-white">
-            Task<span className="font-semibold text-primary">Elite</span>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="relative z-10 w-full max-w-[400px] px-5"
+      >
+        {/* Brand */}
+        <div className="text-center mb-8">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.1, duration: 0.3 }}
+            className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary shadow-lg shadow-primary/25 mb-5"
+          >
+            <CheckSquare className="h-7 w-7 text-primary-foreground" />
+          </motion.div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
+            Task<span className="text-primary">Flow</span>
           </h1>
-          <p className="text-zinc-500 dark:text-zinc-400 text-sm font-light tracking-wide uppercase">
-            Gestão de Alta Performance
+          <p className="text-sm text-muted-foreground mt-1.5">
+            Gestão de tarefas simplificada
           </p>
         </div>
 
-        <Card className="border-none bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md shadow-[0_20px_50px_rgba(0,0,0,0.05)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.3)] overflow-hidden">
-          <div className="h-1.5 w-full bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
-          
-          <CardHeader className="pt-8 text-center">
-            <CardTitle className="text-xl font-medium text-zinc-800 dark:text-zinc-100">
-              {isRegistering ? "Solicitar Acesso" : "Identificação"}
-            </CardTitle>
-            <CardDescription className="font-light">
-              {isRegistering ? "Crie sua conta exclusiva." : "Insira suas credenciais para prosseguir."}
-            </CardDescription>
-          </CardHeader>
-          
-          <form onSubmit={handleAuth}>
-            <CardContent className="space-y-4 px-8 pb-8">
-              <div className="space-y-1">
+        {/* Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15, duration: 0.35 }}
+          className="rounded-2xl border bg-card shadow-xl shadow-foreground/5 overflow-hidden"
+        >
+          {/* Top accent line */}
+          <div className="h-1 w-full bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
+
+          <div className="px-7 pt-7 pb-8">
+            <h2 className="text-base font-bold text-foreground mb-1">
+              {isRegistering ? "Criar conta" : "Entrar na conta"}
+            </h2>
+            <p className="text-xs text-muted-foreground mb-6">
+              {isRegistering
+                ? "Preencha os dados para criar sua conta."
+                : "Insira seus dados para continuar."}
+            </p>
+
+            <form onSubmit={handleAuth} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground/80">E-mail</label>
                 <Input
                   type="email"
-                  placeholder="E-mail profissional"
-                  className="border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 focus:ring-0 focus:border-zinc-400 h-12 rounded-none transition-all"
+                  placeholder="seu@email.com"
+                  className="h-10 rounded-xl text-sm bg-background border-border/80 focus-visible:ring-primary/25"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  autoComplete="email"
                 />
               </div>
-              <div className="space-y-1">
-                <Input
-                  type="password"
-                  placeholder="Senha"
-                  className="border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 focus:ring-0 focus:border-zinc-400 h-12 rounded-none transition-all"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-            </CardContent>
 
-            <CardFooter className="flex flex-col gap-6 px-8 pb-10">
-              <Button 
-                className="w-full h-12 rounded-none bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:opacity-90 transition-all group font-normal tracking-wide" 
-                type="submit" 
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground/80">Senha</label>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Mínimo 6 caracteres"
+                    className="h-10 rounded-xl text-sm bg-background border-border/80 focus-visible:ring-primary/25 pr-10"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    autoComplete={isRegistering ? "new-password" : "current-password"}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <Button
+                className="w-full h-10 rounded-xl mt-2 gap-2 shadow-sm shadow-primary/20 font-semibold"
+                type="submit"
                 disabled={loading}
               >
                 {loading ? (
-                  <span className="flex items-center gap-2">Processando...</span>
-                ) : (
                   <span className="flex items-center gap-2">
-                    {isRegistering ? "Confirmar Cadastro" : "Entrar no Sistema"}
-                    <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                    Aguarde...
                   </span>
+                ) : (
+                  <>
+                    {isRegistering ? (
+                      <><UserPlus className="h-4 w-4" />Criar conta</>
+                    ) : (
+                      <><LogIn className="h-4 w-4" />Entrar<ArrowRight className="h-4 w-4 ml-auto" /></>
+                    )}
+                  </>
                 )}
               </Button>
+            </form>
 
+            <div className="mt-5 text-center">
               <button
                 type="button"
                 onClick={() => setIsRegistering(!isRegistering)}
-                className="text-xs text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors underline underline-offset-4 decoration-zinc-200 dark:decoration-zinc-800"
+                className="text-xs text-muted-foreground hover:text-primary transition-colors underline underline-offset-2 decoration-muted-foreground/40"
               >
-                {isRegistering 
-                  ? "Já possuo acesso exclusivo" 
-                  : "Não possuo uma conta ainda"}
+                {isRegistering
+                  ? "Já tenho uma conta"
+                  : "Não tenho conta — criar agora"}
               </button>
-            </CardFooter>
-          </form>
-        </Card>
+            </div>
+          </div>
+        </motion.div>
 
-        <footer className="mt-12 text-center">
-          <p className="text-[10px] text-zinc-400 uppercase tracking-[0.2em]">
-            © 2026 Sistema de Gestão Privada
-          </p>
-        </footer>
-      </div>
+        <p className="text-center text-[10px] text-muted-foreground/50 mt-8 uppercase tracking-widest">
+          © {new Date().getFullYear()} TaskFlow
+        </p>
+      </motion.div>
     </div>
   );
 }
