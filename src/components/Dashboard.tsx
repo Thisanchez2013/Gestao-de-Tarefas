@@ -83,21 +83,21 @@ export function Dashboard({ pendingCount, completedCount }: Props) {
     >
       {/* Stat: Pendentes */}
       <StatCard
-        icon={<Clock className="h-5 w-5 text-orange-600" />}
+        icon={<Clock className="h-5 w-5 text-orange-500 dark:text-orange-400" />}
         label="Pendentes"
         value={pendingCount}
-        colorClass="text-orange-600"
-        iconBg="bg-orange-50"
+        colorClass="text-orange-600 dark:text-orange-400"
+        iconBg="bg-orange-100/80 dark:bg-orange-500/15"
         delay={0}
       />
 
       {/* Stat: Concluídas */}
       <StatCard
-        icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
+        icon={<CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
         label="Concluídas"
         value={completedCount}
-        colorClass="text-emerald-600"
-        iconBg="bg-emerald-50"
+        colorClass="text-emerald-600 dark:text-emerald-400"
+        iconBg="bg-emerald-100/80 dark:bg-emerald-500/15"
         delay={0.07}
       />
 
@@ -107,7 +107,7 @@ export function Dashboard({ pendingCount, completedCount }: Props) {
         label="Total"
         value={total}
         colorClass="text-primary"
-        iconBg="bg-accent"
+        iconBg="bg-primary/10 dark:bg-primary/20"
         delay={0.14}
       />
 
