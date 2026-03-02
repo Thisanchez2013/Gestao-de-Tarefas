@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { LogIn, UserPlus, CheckSquare, ArrowRight, Eye, EyeOff, User, Mail, AtSign } from "lucide-react";
+import { LogIn, UserPlus, CheckSquare, ArrowRight, Eye, EyeOff, Mail, AtSign } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function Login() {
@@ -16,9 +16,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
 
-  // No login: controla se o campo é username ou email
-  const [loginField, setLoginField] = useState("");
-  const [useEmailLogin, setUseEmailLogin] = useState(false);
+  // Login: apenas username agora
+  const [loginUsername, setLoginUsername] = useState("");
 
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -41,7 +40,7 @@ export default function Login() {
         .from('profiles')
         .select('id')
         .eq('username', username.toLowerCase().trim())
-        .single();
+        .maybeSingle();
 
       if (existing) {
         toast({ variant: "destructive", title: "Usuário já existe", description: "Escolha outro nome de usuário." });
@@ -81,17 +80,23 @@ export default function Login() {
     setLoading(true);
 
     try {
-      let emailToUse = loginField.trim();
+      const input = loginUsername.trim();
 
-      // Se não parece um e-mail, trata como username e busca o e-mail
-      const isEmail = loginField.includes("@");
-      if (!isEmail) {
-        const found = await getEmailByUsername(loginField);
-        if (!found) {
-          toast({ variant: "destructive", title: "Usuário não encontrado", description: "Verifique o nome de usuário ou use seu e-mail." });
-          return;
-        }
-        emailToUse = found;
+      if (!input) {
+        toast({ variant: "destructive", title: "Informe o nome de usuário." });
+        return;
+      }
+
+      // Busca o e-mail pelo username — sem lógica de detecção
+      const emailToUse = await getEmailByUsername(input);
+
+      if (!emailToUse) {
+        toast({
+          variant: "destructive",
+          title: "Usuário não encontrado",
+          description: "Verifique o nome de usuário e tente novamente.",
+        });
+        return;
       }
 
       const { error } = await supabase.auth.signInWithPassword({ email: emailToUse, password });
@@ -100,7 +105,7 @@ export default function Login() {
       toast({ title: "Bem-vindo de volta! 👋" });
       navigate("/");
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Erro ao entrar", description: "Usuário/e-mail ou senha incorretos." });
+      toast({ variant: "destructive", title: "Usuário ou senha incorretos." });
     } finally {
       setLoading(false);
     }
@@ -110,7 +115,7 @@ export default function Login() {
     setEmail("");
     setUsername("");
     setPassword("");
-    setLoginField("");
+    setLoginUsername("");
   };
 
   return (
@@ -163,7 +168,7 @@ export default function Login() {
             <p className="text-xs text-muted-foreground mb-6">
               {isRegistering
                 ? "Preencha os dados para criar sua conta."
-                : "Use seu nome de usuário ou e-mail para entrar."}
+                : "Use seu nome de usuário para entrar."}
             </p>
 
             <AnimatePresence mode="wait">
@@ -196,7 +201,7 @@ export default function Login() {
                       />
                     </div>
                     <p className="text-[10px] text-muted-foreground pl-0.5">
-                      Sem espaços. Usado para entrar no sistema.
+                      Sem espaços. Será usado para entrar no sistema.
                     </p>
                   </div>
 
@@ -215,6 +220,9 @@ export default function Login() {
                         autoComplete="email"
                       />
                     </div>
+                    <p className="text-[10px] text-muted-foreground pl-0.5">
+                      Usado apenas para confirmação de conta. Não precisará dele para entrar.
+                    </p>
                   </div>
 
                   {/* Senha */}
@@ -258,7 +266,7 @@ export default function Login() {
                 </motion.form>
 
               ) : (
-                /* FORMULÁRIO DE LOGIN */
+                /* FORMULÁRIO DE LOGIN — só username + senha */
                 <motion.form
                   key="login"
                   initial={{ opacity: 0, x: -16 }}
@@ -268,31 +276,24 @@ export default function Login() {
                   onSubmit={handleLogin}
                   className="space-y-4"
                 >
-                  {/* Username ou Email */}
+                  {/* Username */}
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-foreground/80">
-                        {loginField.includes("@") ? "E-mail" : "Usuário ou e-mail"}
-                      </label>
-                    </div>
+                    <label className="text-xs font-semibold text-foreground/80">
+                      Nome de usuário
+                    </label>
                     <div className="relative">
-                      {loginField.includes("@")
-                        ? <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        : <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      }
+                      <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         type="text"
-                        placeholder="usuario ou email@exemplo.com"
+                        placeholder="seunome"
                         className="h-10 rounded-xl text-sm bg-background border-border/80 focus-visible:ring-primary/25 pl-9"
-                        value={loginField}
-                        onChange={(e) => setLoginField(e.target.value)}
+                        value={loginUsername}
+                        onChange={(e) => setLoginUsername(e.target.value.replace(/\s/g, ""))}
                         required
+                        autoFocus
                         autoComplete="username"
                       />
                     </div>
-                    <p className="text-[10px] text-muted-foreground pl-0.5">
-                      Digite seu nome de usuário ou e-mail cadastrado.
-                    </p>
                   </div>
 
                   {/* Senha */}
@@ -355,7 +356,7 @@ export default function Login() {
         <p className="text-center text-[10px] text-muted-foreground/50 mt-8 uppercase tracking-widest">
           © {new Date().getFullYear()} TaskFlow
         </p>
-        
+
       </motion.div>
     </div>
   );

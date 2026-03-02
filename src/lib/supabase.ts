@@ -9,19 +9,25 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: window.sessionStorage,
+    storage: window.localStorage, // ← era sessionStorage
     persistSession: true,
     autoRefreshToken: true,
   },
 });
 
 export async function getEmailByUsername(username: string): Promise<string | null> {
+  const normalized = username.toLowerCase().trim();
+
   const { data, error } = await supabase
     .from('profiles')
     .select('email')
-    .eq('username', username.toLowerCase().trim())
-    .single();
+    .eq('username', normalized)
+    .maybeSingle(); // ← era single(), que jogava erro quando não encontrava
 
-  if (error || !data) return null;
-  return data.email;
+  if (error) {
+    console.error('Erro ao buscar usuário:', error.message);
+    return null;
+  }
+
+  return data?.email ?? null;
 }

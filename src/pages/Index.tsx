@@ -26,6 +26,7 @@ import {
   ClipboardList,
   Trash2,
   Building2,
+  KeyRound,
 } from "lucide-react";
 import type { Task } from "@/types/task";
 import { motion, AnimatePresence } from "framer-motion";
@@ -131,6 +132,17 @@ const Index = () => {
               <Plus className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Nova Tarefa</span>
               <span className="sm:hidden">Tarefa</span>
+            </Button>
+
+            {/* Botão alterar senha */}
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => navigate("/alterar-senha")}
+              className="h-8 w-8 rounded-xl text-muted-foreground hover:text-foreground"
+              title="Alterar senha"
+            >
+              <KeyRound className="h-4 w-4" />
             </Button>
 
             <Button
