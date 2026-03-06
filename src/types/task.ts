@@ -6,6 +6,7 @@ export type Status = "pending" | "completed";
 
 export interface Task {
   id: string;
+  user_id: string; // ← adicionado
   title: string;
   description?: string;
   status: Status;

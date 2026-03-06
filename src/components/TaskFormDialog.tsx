@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTaskStore } from "@/hooks/useTaskStore";
 import { MapPin, Building2, Clock, Tag, X, StickyNote, CalendarDays, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { maskHours } from "@/hooks/useMask";
 
 interface Props {
   open: boolean;
@@ -262,12 +263,12 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
                   </Label>
                   <Input
                     id="hours"
-                    type="number"
-                    min="0"
-                    step="0.5"
+                    type="text"
+                    inputMode="decimal"
                     value={estimatedHours}
-                    onChange={(e) => setEstimatedHours(e.target.value)}
-                    placeholder="Ex: 2"
+                    onChange={(e) => setEstimatedHours(maskHours(e.target.value))}
+                    placeholder="Ex: 2 ou 1.5"
+                    maxLength={5}
                     className={cn("text-sm rounded-xl h-10", errors.estimatedHours && "border-destructive")}
                   />
                   {errors.estimatedHours && <p className="text-xs text-destructive font-medium">{errors.estimatedHours}</p>}
@@ -317,7 +318,6 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
                   <Tag className="h-3 w-3" /> Etiquetas
                 </Label>
-                {/* Presets */}
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {PRESET_TAGS.map((preset) => (
                     <button
@@ -336,7 +336,6 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
                   ))}
                 </div>
 
-                {/* Tag pills + input */}
                 <div
                   className="flex flex-wrap gap-1.5 p-2.5 rounded-xl border border-border/80 bg-background min-h-[44px] cursor-text"
                   onClick={() => tagInputRef.current?.focus()}

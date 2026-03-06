@@ -15,6 +15,7 @@ import { useTaskStore } from "@/hooks/useTaskStore";
 import { Supplier, SupplierFormData } from "@/types/supplier";
 import { Building2, Phone, MapPin, Mail, StickyNote, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { maskPhone } from "@/hooks/useMask";
 
 interface Props {
   open: boolean;
@@ -58,6 +59,7 @@ export function SupplierFormDialog({ open, onOpenChange, editSupplier }: Props) 
     const errs: Record<string, string> = {};
     if (!formData.name.trim()) errs.name = "O nome é obrigatório.";
     if (!formData.phone.trim()) errs.phone = "O telefone é obrigatório.";
+    else if (formData.phone.replace(/\D/g, "").length < 10) errs.phone = "Telefone inválido.";
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       errs.email = "E-mail inválido.";
     }
@@ -159,8 +161,10 @@ export function SupplierFormDialog({ open, onOpenChange, editSupplier }: Props) 
               <Input
                 id="s-phone"
                 value={formData.phone}
-                onChange={set("phone")}
+                onChange={(e) => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
                 placeholder="(11) 99999-9999"
+                maxLength={15}
+                inputMode="numeric"
                 className={cn("rounded-xl h-10 text-sm", errors.phone && "border-destructive")}
               />
               {errors.phone && <p className="text-xs text-destructive font-medium">{errors.phone}</p>}

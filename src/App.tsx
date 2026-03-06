@@ -9,40 +9,40 @@ import { TaskStoreProvider } from "./hooks/useTaskStore";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
-import AlterarSenha from "./pages/AlterarSenha"; // ← adicionar
+import AlterarSenha from "./pages/AlterarSenha";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TaskStoreProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <TaskStoreProvider>  {/* ← movido para DENTRO do ProtectedRoute */}
                   <Index />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/alterar-senha"
-              element={
-                <ProtectedRoute>
-                  <AlterarSenha />  {/* ← adicionar */}
-                </ProtectedRoute>
-              }
-            />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </TaskStoreProvider>
+                </TaskStoreProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/alterar-senha"
+            element={
+              <ProtectedRoute>
+                <AlterarSenha />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </TooltipProvider>
   </QueryClientProvider>
 );
 
