@@ -1,10 +1,8 @@
 // src/components/TaskDetailModal.tsx
+import { useState, useEffect } from "react";
 import type { TaskWithSupplier } from "@/types/task";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   CheckCircle2,
   Circle,
@@ -23,8 +21,11 @@ import {
   Mail,
   Layers,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { format, isValid, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { TaskTimer } from "@/components/TaskTimer";
+import { useTaskStore } from "@/hooks/useTaskStore";
 
 interface Props {
   task: TaskWithSupplier | null;
@@ -72,8 +73,77 @@ const TAG_COLORS = [
 
 function getTagColor(tag: string): string {
   let hash = 0;
-  for (let i = 0; i < tag.length; i++) hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < tag.length; i++)
+    hash = tag.charCodeAt(i) + ((hash << 5) - hash);
   return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
+}
+
+// Animação SVG do check de conclusão
+function CompletionOverlay({ onDone }: { onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 1800);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm rounded-lg"
+    >
+      {/* Círculo pulsante de fundo */}
+      <motion.div
+        initial={{ scale: 0 }}
+        animate={{ scale: [0, 1.15, 1] }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="relative flex items-center justify-center"
+      >
+        {/* Anel externo pulsante */}
+        <motion.div
+          className="absolute h-28 w-28 rounded-full bg-emerald-500/10"
+          animate={{ scale: [1, 1.6], opacity: [0.6, 0] }}
+          transition={{ duration: 1, repeat: 1, ease: "easeOut" }}
+        />
+        {/* Círculo principal */}
+        <motion.div
+          className="h-20 w-20 rounded-full bg-emerald-500 flex items-center justify-center shadow-xl shadow-emerald-500/30"
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.1 }}
+        >
+          {/* Check SVG animado */}
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-10 w-10"
+          >
+            <motion.path
+              d="M5 13l4 4L19 7"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: 0.4, delay: 0.3, ease: "easeOut" }}
+            />
+          </svg>
+        </motion.div>
+      </motion.div>
+
+      {/* Texto */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.55 }}
+        className="mt-5 text-center"
+      >
+        <p className="text-base font-bold text-foreground">Tarefa concluída!</p>
+        <p className="text-xs text-muted-foreground mt-1">Ótimo trabalho 🎉</p>
+      </motion.div>
+    </motion.div>
+  );
 }
 
 export function TaskDetailModal({
@@ -84,6 +154,9 @@ export function TaskDetailModal({
   onEdit,
   onDelete,
 }: Props) {
+  const { updateTask } = useTaskStore();
+  const [showCompletion, setShowCompletion] = useState(false);
+
   if (!task) return null;
 
   const isCompleted = task.status === "completed";
@@ -98,7 +171,6 @@ export function TaskDetailModal({
 
   const createdAt = new Date(task.created_at);
   const updatedAt = new Date(task.updated_at);
-
   const tags = task.tags ?? [];
 
   const handleWhatsApp = (phone: string) => {
@@ -115,17 +187,42 @@ export function TaskDetailModal({
     setTimeout(() => onDelete(task.id), 150);
   };
 
+  // Ao clicar em "Concluir": mostra animação, depois fecha o modal
+  const handleToggle = () => {
+    if (!isCompleted) {
+      // Vai concluir — mostra animação primeiro
+      setShowCompletion(true);
+      onToggle(task.id);
+    } else {
+      // Vai reabrir — sem animação
+      onToggle(task.id);
+    }
+  };
+
+  const handleCompletionDone = () => {
+    setShowCompletion(false);
+    // Fecha o modal 200ms depois da animação sumir
+    setTimeout(() => onOpenChange(false), 200);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[520px] p-0 overflow-hidden gap-0 border-0 shadow-2xl">
         {/* Accent bar por prioridade */}
         <div className={`h-1 w-full ${config.accent}`} />
 
+        {/* Overlay de conclusão */}
+        <AnimatePresence>
+          {showCompletion && (
+            <CompletionOverlay onDone={handleCompletionDone} />
+          )}
+        </AnimatePresence>
+
         {/* Header */}
         <div className="relative px-6 pt-5 pb-4 bg-gradient-to-b from-muted/30 to-transparent">
           <div className="flex items-start gap-3 pr-8">
             <button
-              onClick={() => onToggle(task.id)}
+              onClick={handleToggle}
               className="mt-0.5 shrink-0 transition-transform active:scale-90 focus:outline-none"
             >
               {isCompleted ? (
@@ -136,21 +233,29 @@ export function TaskDetailModal({
             </button>
 
             <div className="flex-1 min-w-0">
-              <h2 className={`text-lg font-bold leading-snug ${isCompleted ? "line-through text-muted-foreground" : "text-foreground"}`}>
+              <h2
+                className={`text-lg font-bold leading-snug ${
+                  isCompleted ? "line-through text-muted-foreground" : "text-foreground"
+                }`}
+              >
                 {task.title}
               </h2>
 
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide border ${config.bgColor} ${config.textColor} ${config.border}`}>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide border ${config.bgColor} ${config.textColor} ${config.border}`}
+                >
                   <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
                   Prioridade {config.label}
                 </span>
 
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide border ${
-                  isCompleted
-                    ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
-                    : "bg-muted text-muted-foreground border-border"
-                }`}>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide border ${
+                    isCompleted
+                      ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
+                      : "bg-muted text-muted-foreground border-border"
+                  }`}
+                >
                   {isCompleted ? (
                     <><CheckCircle2 className="h-3 w-3" /> Concluída</>
                   ) : (
@@ -173,35 +278,55 @@ export function TaskDetailModal({
         <div className="overflow-y-auto max-h-[calc(100vh-220px)] px-6 pb-2">
           <div className="space-y-4 py-2">
 
+            {/* Cronômetro */}
+            <TaskTimer task={task} onUpdate={updateTask} />
+
             {/* Descrição */}
             {task.description && (
               <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Descrição</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Descrição
+                  </span>
                 </div>
-                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{task.description}</p>
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                  {task.description}
+                </p>
               </div>
             )}
 
             {/* Grid prazo + estimativa */}
             <div className="grid grid-cols-2 gap-3">
-              <div className={`rounded-xl border p-3.5 ${isOverdue ? "border-rose-200 bg-rose-50/60 dark:border-rose-800 dark:bg-rose-950/30" : "border-border/60 bg-muted/20"}`}>
+              <div
+                className={`rounded-xl border p-3.5 ${
+                  isOverdue
+                    ? "border-rose-200 bg-rose-50/60 dark:border-rose-800 dark:bg-rose-950/30"
+                    : "border-border/60 bg-muted/20"
+                }`}
+              >
                 <div className="flex items-center gap-1.5 mb-1">
                   {isOverdue ? (
                     <AlertCircle className="h-3.5 w-3.5 text-rose-500" />
                   ) : (
                     <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                   )}
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Prazo</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Prazo
+                  </span>
                 </div>
                 {isDateValid ? (
                   <>
-                    <p className={`text-sm font-semibold ${isOverdue ? "text-rose-600 dark:text-rose-400" : "text-foreground"}`}>
+                    <p
+                      className={`text-sm font-semibold ${
+                        isOverdue ? "text-rose-600 dark:text-rose-400" : "text-foreground"
+                      }`}
+                    >
                       {format(dateObj, "dd/MM/yyyy", { locale: ptBR })}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
-                      {isOverdue ? "Vencida " : ""}{formatDistanceToNow(dateObj, { locale: ptBR, addSuffix: true })}
+                      {isOverdue ? "Vencida " : ""}
+                      {formatDistanceToNow(dateObj, { locale: ptBR, addSuffix: true })}
                     </p>
                   </>
                 ) : (
@@ -212,7 +337,9 @@ export function TaskDetailModal({
               <div className="rounded-xl border border-border/60 bg-muted/20 p-3.5">
                 <div className="flex items-center gap-1.5 mb-1">
                   <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Estimativa</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Estimativa
+                  </span>
                 </div>
                 {task.estimated_hours && task.estimated_hours > 0 ? (
                   <>
@@ -230,11 +357,16 @@ export function TaskDetailModal({
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <Tag className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tags</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Tags
+                  </span>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {tags.map((tag) => (
-                    <span key={tag} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${getTagColor(tag)}`}>
+                    <span
+                      key={tag}
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${getTagColor(tag)}`}
+                    >
                       <Tag className="h-3 w-3" />
                       {tag}
                     </span>
@@ -248,9 +380,13 @@ export function TaskDetailModal({
               <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <StickyNote className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Notas Adicionais</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Notas Adicionais
+                  </span>
                 </div>
-                <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">{task.notes}</p>
+                <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
+                  {task.notes}
+                </p>
               </div>
             )}
 
@@ -259,7 +395,9 @@ export function TaskDetailModal({
               <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
                 <div className="px-4 py-3 bg-primary/5 border-b border-border/40 flex items-center gap-2">
                   <Building2 className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Fornecedor</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Fornecedor
+                  </span>
                 </div>
 
                 <div className="p-4 space-y-3">
@@ -288,14 +426,22 @@ export function TaskDetailModal({
                     {supplier.email && (
                       <div className="flex items-center gap-2 text-sm">
                         <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <a href={`mailto:${supplier.email}`} className="text-primary hover:underline truncate">{supplier.email}</a>
+                        <a
+                          href={`mailto:${supplier.email}`}
+                          className="text-primary hover:underline truncate"
+                        >
+                          {supplier.email}
+                        </a>
                       </div>
                     )}
                     {supplier.phone && (
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 text-sm">
                           <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <a href={`tel:${supplier.phone}`} className="text-muted-foreground hover:text-foreground transition-colors">
+                          <a
+                            href={`tel:${supplier.phone}`}
+                            className="text-muted-foreground hover:text-foreground transition-colors"
+                          >
                             {supplier.phone}
                           </a>
                         </div>
@@ -312,8 +458,12 @@ export function TaskDetailModal({
 
                   {supplier.notes && (
                     <div className="pt-2 border-t border-border/40">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Obs. do fornecedor</p>
-                      <p className="text-xs text-muted-foreground leading-relaxed">{supplier.notes}</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                        Obs. do fornecedor
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        {supplier.notes}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -323,19 +473,24 @@ export function TaskDetailModal({
             {/* Metadados */}
             <div className="rounded-xl bg-muted/30 px-4 py-3 grid grid-cols-2 gap-3 border border-border/40">
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Criada em</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
+                  Criada em
+                </p>
                 <p className="text-xs text-foreground font-medium font-mono">
                   {isValid(createdAt) ? format(createdAt, "dd/MM/yyyy", { locale: ptBR }) : "—"}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Atualizada</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
+                  Atualizada
+                </p>
                 <p className="text-xs text-foreground font-medium font-mono">
-                  {isValid(updatedAt) ? formatDistanceToNow(updatedAt, { locale: ptBR, addSuffix: true }) : "—"}
+                  {isValid(updatedAt)
+                    ? formatDistanceToNow(updatedAt, { locale: ptBR, addSuffix: true })
+                    : "—"}
                 </p>
               </div>
             </div>
-
           </div>
         </div>
 
@@ -346,7 +501,15 @@ export function TaskDetailModal({
             Editar
           </Button>
 
-          <Button size="sm" className="flex-1 gap-2 h-9" onClick={() => onToggle(task.id)}>
+          <Button
+            size="sm"
+            className={`flex-1 gap-2 h-9 transition-all ${
+              !isCompleted
+                ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                : ""
+            }`}
+            onClick={handleToggle}
+          >
             {isCompleted ? (
               <><Circle className="h-3.5 w-3.5" />Reabrir</>
             ) : (

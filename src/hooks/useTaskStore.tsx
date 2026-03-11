@@ -1,3 +1,4 @@
+// src/hooks/useTaskStore.tsx
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Task, TaskFormData, FilterStatus, FilterPriority, TaskWithSupplier } from "@/types/task";
@@ -11,7 +12,9 @@ const priorityOrder = { high: 0, medium: 1, low: 2 };
 
 function sortTasks(tasks: TaskWithSupplier[]): TaskWithSupplier[] {
   return [...tasks].sort((a, b) => {
-    const pDiff = priorityOrder[a.priority as keyof typeof priorityOrder] - priorityOrder[b.priority as keyof typeof priorityOrder];
+    const pDiff =
+      priorityOrder[a.priority as keyof typeof priorityOrder] -
+      priorityOrder[b.priority as keyof typeof priorityOrder];
     if (pDiff !== 0) return pDiff;
     const dateA = a.due_date ? new Date(a.due_date).getTime() : 0;
     const dateB = b.due_date ? new Date(b.due_date).getTime() : 0;
@@ -30,12 +33,14 @@ function useTaskStoreLogic() {
 
   const fetchData = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
       const [tasksRes, suppliersRes] = await Promise.all([
-        supabase.from('tasks').select('*').eq('user_id', user.id),
-        supabase.from('suppliers').select('*').eq('user_id', user.id)
+        supabase.from("tasks").select("*").eq("user_id", user.id),
+        supabase.from("suppliers").select("*").eq("user_id", user.id),
       ]);
 
       setTasks(tasksRes.data || []);
@@ -50,26 +55,35 @@ function useTaskStoreLogic() {
   useEffect(() => {
     fetchData();
 
-    const channel = supabase.channel('db-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => fetchData())
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'suppliers' }, () => fetchData())
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'suppliers' }, () => fetchData())
+    const channel = supabase
+      .channel("db-updates")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => fetchData())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "suppliers" }, () =>
+        fetchData()
+      )
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "suppliers" }, () =>
+        fetchData()
+      )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchData]);
 
   // --- FORNECEDORES ---
   const addSupplier = async (formData: SupplierFormData) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       const { data, error } = await supabase
-        .from('suppliers')
+        .from("suppliers")
         .insert([{ ...formData, user_id: user?.id }])
         .select()
         .single();
       if (error) throw error;
-      if (data) setSuppliers(prev => [...prev, data]);
+      if (data) setSuppliers((prev) => [...prev, data]);
       toast({ title: "Fornecedor cadastrado!" });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
@@ -78,15 +92,15 @@ function useTaskStoreLogic() {
 
   const updateSupplier = async (id: string, formData: Partial<SupplierFormData>) => {
     try {
-      setSuppliers(prev => prev.map(s => s.id === id ? { ...s, ...formData } : s));
+      setSuppliers((prev) => prev.map((s) => (s.id === id ? { ...s, ...formData } : s)));
       const { data, error } = await supabase
-        .from('suppliers')
+        .from("suppliers")
         .update(formData)
-        .eq('id', id)
+        .eq("id", id)
         .select()
         .single();
       if (error) throw error;
-      if (data) setSuppliers(prev => prev.map(s => s.id === id ? data : s));
+      if (data) setSuppliers((prev) => prev.map((s) => (s.id === id ? data : s)));
       toast({ title: "Fornecedor atualizado!" });
     } catch (error: any) {
       fetchData();
@@ -96,9 +110,9 @@ function useTaskStoreLogic() {
 
   const deleteSupplier = async (id: string) => {
     try {
-      const { error } = await supabase.from('suppliers').delete().eq('id', id);
+      const { error } = await supabase.from("suppliers").delete().eq("id", id);
       if (error) throw error;
-      setSuppliers(prev => prev.filter(s => s.id !== id));
+      setSuppliers((prev) => prev.filter((s) => s.id !== id));
       toast({ title: "Fornecedor removido!" });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
@@ -108,76 +122,81 @@ function useTaskStoreLogic() {
   // --- TAREFAS ---
   const addTask = async (formData: TaskFormData) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       const { data, error } = await supabase
-        .from('tasks')
-        .insert([{ ...formData, status: 'pending', user_id: user?.id }])
+        .from("tasks")
+        .insert([{ ...formData, status: "pending", user_id: user?.id }])
         .select()
         .single();
       if (error) throw error;
-      if (data) setTasks(prev => [...prev, data]);
+      if (data) setTasks((prev) => [...prev, data]);
       toast({ title: "Tarefa adicionada!" });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro", description: error.message });
     }
   };
 
-  const updateTask = async (id: string, formData: Partial<TaskFormData>) => {
+  const updateTask = async (id: string, formData: Partial<Task>) => {
     try {
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === id ? { ...t, ...formData, updated_at: new Date().toISOString() } : t
+        )
+      );
       const { error } = await supabase
-        .from('tasks')
+        .from("tasks")
         .update({ ...formData, updated_at: new Date().toISOString() })
-        .eq('id', id);
+        .eq("id", id);
       if (error) throw error;
-      setTasks(prev => prev.map(t => t.id === id ? { ...t, ...formData, updated_at: new Date().toISOString() } : t));
-      toast({ title: "Tarefa atualizada!" });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Erro", description: error.message });
+      fetchData();
+      toast({ variant: "destructive", title: "Erro ao atualizar", description: error.message });
     }
   };
 
   const toggleStatus = async (id: string) => {
-    const task = tasks.find(t => t.id === id);
+    const task = tasks.find((t) => t.id === id);
     if (!task) return;
     const newStatus = task.status === "pending" ? "completed" : "pending";
-    // Otimista
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: newStatus } : t)));
     const { error } = await supabase
-      .from('tasks')
+      .from("tasks")
       .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq('id', id);
+      .eq("id", id);
     if (error) {
-      // Rollback
-      setTasks(prev => prev.map(t => t.id === id ? { ...t, status: task.status } : t));
-      toast({ variant: "destructive", title: "Erro ao atualizar status", description: error.message });
+      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: task.status } : t)));
+      toast({
+        variant: "destructive",
+        title: "Erro ao atualizar status",
+        description: error.message,
+      });
     }
   };
 
-  // Move para lixeira — soft delete via deleted_at
   const softDelete = async (id: string) => {
     const deletedAt = new Date().toISOString();
-    // Otimista
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, deleted_at: deletedAt } : t));
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, deleted_at: deletedAt } : t)));
     const { error } = await supabase
-      .from('tasks')
+      .from("tasks")
       .update({ deleted_at: deletedAt })
-      .eq('id', id);
+      .eq("id", id);
     if (error) {
-      // Rollback
-      setTasks(prev => prev.map(t => t.id === id ? { ...t, deleted_at: null } : t));
-      toast({ variant: "destructive", title: "Erro ao mover para lixeira", description: error.message });
+      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, deleted_at: null } : t)));
+      toast({
+        variant: "destructive",
+        title: "Erro ao mover para lixeira",
+        description: error.message,
+      });
     } else {
       toast({ title: "Movido para a lixeira" });
     }
   };
 
-  // Restaura da lixeira
   const restore = async (id: string) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, deleted_at: null } : t));
-    const { error } = await supabase
-      .from('tasks')
-      .update({ deleted_at: null })
-      .eq('id', id);
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, deleted_at: null } : t)));
+    const { error } = await supabase.from("tasks").update({ deleted_at: null }).eq("id", id);
     if (error) {
       fetchData();
       toast({ variant: "destructive", title: "Erro ao restaurar", description: error.message });
@@ -186,13 +205,16 @@ function useTaskStoreLogic() {
     }
   };
 
-  // Exclui permanentemente
   const permanentDelete = async (id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id));
-    const { error } = await supabase.from('tasks').delete().eq('id', id);
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    const { error } = await supabase.from("tasks").delete().eq("id", id);
     if (error) {
       fetchData();
-      toast({ variant: "destructive", title: "Erro ao excluir", description: error.message });
+      toast({
+        variant: "destructive",
+        title: "Erro ao excluir",
+        description: error.message,
+      });
     } else {
       toast({ title: "Tarefa excluída permanentemente." });
     }
@@ -200,17 +222,17 @@ function useTaskStoreLogic() {
 
   // --- DERIVADOS ---
   const tasksWithSuppliers = useMemo(() => {
-    return tasks.map(task => ({
+    return tasks.map((task) => ({
       ...task,
-      supplier: suppliers.find(s => s.id === task.supplier_id)
+      supplier: suppliers.find((s) => s.id === task.supplier_id),
     }));
   }, [tasks, suppliers]);
 
-  const activeTasks = tasksWithSuppliers.filter(t => !t.deleted_at);
-  const trashedTasks = tasksWithSuppliers.filter(t => !!t.deleted_at);
+  const activeTasks = tasksWithSuppliers.filter((t) => !t.deleted_at);
+  const trashedTasks = tasksWithSuppliers.filter((t) => !!t.deleted_at);
 
   const filteredTasks = sortTasks(
-    activeTasks.filter(t => {
+    activeTasks.filter((t) => {
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterPriority !== "all" && t.priority !== filterPriority) return false;
       if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -238,8 +260,8 @@ function useTaskStoreLogic() {
     softDelete,
     restore,
     permanentDelete,
-    pendingCount: activeTasks.filter(t => t.status === 'pending').length,
-    completedCount: activeTasks.filter(t => t.status === 'completed').length,
+    pendingCount: activeTasks.filter((t) => t.status === "pending").length,
+    completedCount: activeTasks.filter((t) => t.status === "completed").length,
   };
 }
 
