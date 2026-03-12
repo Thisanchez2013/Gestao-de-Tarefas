@@ -6,10 +6,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { TaskStoreProvider } from "./hooks/useTaskStore";
+import { SettingsProvider } from "./hooks/useSettings";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import AlterarSenha from "./pages/AlterarSenha";
+import Settings from "./pages/Settings";
 
 const queryClient = new QueryClient();
 
@@ -25,9 +27,21 @@ const App = () => (
             path="/"
             element={
               <ProtectedRoute>
-                <TaskStoreProvider>  {/* ← movido para DENTRO do ProtectedRoute */}
-                  <Index />
-                </TaskStoreProvider>
+                <SettingsProvider>
+                  <TaskStoreProvider>
+                    <Index />
+                  </TaskStoreProvider>
+                </SettingsProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <SettingsProvider>
+                  <Settings />
+                </SettingsProvider>
               </ProtectedRoute>
             }
           />

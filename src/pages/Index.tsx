@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useTaskStore } from "@/hooks/useTaskStore";
 import { useTheme } from "@/hooks/useTheme";
+import { useSettings } from "@/hooks/useSettings";
 import { Dashboard } from "@/components/Dashboard";
 import { FilterBar } from "@/components/FilterBar";
 import { TaskCard } from "@/components/TaskCard";
@@ -27,6 +28,7 @@ import {
   Trash2,
   Building2,
   KeyRound,
+  Settings2,
 } from "lucide-react";
 import type { Task } from "@/types/task";
 import { motion, AnimatePresence } from "framer-motion";
@@ -38,8 +40,10 @@ const Index = () => {
   const { dark, toggle: toggleTheme } = useTheme();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { settings } = useSettings();
 
-  const [tab, setTab] = useState<Tab>("tasks");
+  const defaultTab = (settings.system.defaultTab as Tab) ?? "tasks";
+  const [tab, setTab] = useState<Tab>(defaultTab);
   const [formOpen, setFormOpen] = useState(false);
   const [supplierFormOpen, setSupplierFormOpen] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
@@ -134,7 +138,18 @@ const Index = () => {
               <span className="sm:hidden">Tarefa</span>
             </Button>
 
-            {/* Botão alterar senha */}
+            {/* Configurações */}
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => navigate("/settings")}
+              className="h-8 w-8 rounded-xl text-muted-foreground hover:text-foreground"
+              title="Configurações"
+            >
+              <Settings2 className="h-4 w-4" />
+            </Button>
+
+            {/* Alterar senha */}
             <Button
               size="icon"
               variant="ghost"
@@ -159,22 +174,26 @@ const Index = () => {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-5">
-        {/* Dashboard stats */}
-        <Dashboard
-          pendingCount={store.pendingCount}
-          completedCount={store.completedCount}
-        />
-
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Buscar tarefas pelo título…"
-            className="pl-10 h-10 rounded-xl bg-card border-border/80 text-sm placeholder:text-muted-foreground/60 focus-visible:ring-primary/30"
-            value={store.searchQuery}
-            onChange={(e) => store.setSearchQuery(e.target.value)}
+        {/* Dashboard — controlado pelas configurações */}
+        {settings.interface.showDashboard && (
+          <Dashboard
+            pendingCount={store.pendingCount}
+            completedCount={store.completedCount}
           />
-        </div>
+        )}
+
+        {/* Search — controlado pelas configurações */}
+        {settings.interface.showSearchBar && (
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Buscar tarefas pelo título…"
+              className="pl-10 h-10 rounded-xl bg-card border-border/80 text-sm placeholder:text-muted-foreground/60 focus-visible:ring-primary/30"
+              value={store.searchQuery}
+              onChange={(e) => store.setSearchQuery(e.target.value)}
+            />
+          </div>
+        )}
 
         {/* Tab navigation */}
         <div className="flex gap-1 border-b border-border/60 overflow-x-auto scrollbar-thin">
@@ -218,22 +237,25 @@ const Index = () => {
         <AnimatePresence mode="wait">
           <motion.div
             key={tab}
-            initial={{ opacity: 0, y: 8 }}
+            initial={settings.interface.animationsEnabled ? { opacity: 0, y: 8 } : false}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
+            exit={settings.interface.animationsEnabled ? { opacity: 0, y: -4 } : undefined}
             transition={{ duration: 0.2 }}
           >
             {tab === "tasks" && (
               <div className="space-y-4">
-                <FilterBar
-                  filterStatus={store.filterStatus}
-                  filterPriority={store.filterPriority}
-                  onStatusChange={store.setFilterStatus}
-                  onPriorityChange={store.setFilterPriority}
-                />
+                {/* FilterBar — controlada pelas configurações */}
+                {settings.interface.showFilterBar && (
+                  <FilterBar
+                    filterStatus={store.filterStatus}
+                    filterPriority={store.filterPriority}
+                    onStatusChange={store.setFilterStatus}
+                    onPriorityChange={store.setFilterPriority}
+                  />
+                )}
 
                 {/* Task list */}
-                <div className="space-y-2 task-list">
+                <div className={`space-y-2 task-list ${settings.interface.compactCards ? "space-y-1" : ""}`}>
                   {store.tasks.map((task) => (
                     <TaskCard
                       key={task.id}
@@ -307,10 +329,11 @@ const Index = () => {
       />
 
       <TaskDetailModal
-        task={detailTask ? store.suppliers
-          ? { ...detailTask, supplier: store.suppliers.find(s => s.id === detailTask.supplier_id) }
-          : detailTask
-        : null}
+        task={detailTask
+          ? store.suppliers
+            ? { ...detailTask, supplier: store.suppliers.find(s => s.id === detailTask.supplier_id) }
+            : detailTask
+          : null}
         open={detailOpen}
         onOpenChange={setDetailOpen}
         onToggle={store.toggleStatus}

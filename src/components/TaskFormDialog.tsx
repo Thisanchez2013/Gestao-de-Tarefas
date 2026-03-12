@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useTaskStore } from "@/hooks/useTaskStore";
+import { useSettings } from "@/hooks/useSettings";
 import { MapPin, Building2, Clock, Tag, X, StickyNote, CalendarDays, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { maskHours } from "@/hooks/useMask";
@@ -47,13 +48,16 @@ const PRESET_TAGS = ["Compras", "Reunião", "Entrega", "Revisão", "Pagamento", 
 export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdate }: Props) {
   const { toast } = useToast();
   const { suppliers } = useTaskStore();
+  const { settings, isTaskFieldVisible, isTaskFieldRequired } = useSettings();
   const isEditing = !!editTask;
   const tagInputRef = useRef<HTMLInputElement>(null);
+
+  const defaultPriority = settings.system.defaultPriority as Priority;
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState(getTodayStr());
-  const [priority, setPriority] = useState<Priority>("medium");
+  const [priority, setPriority] = useState<Priority>(defaultPriority);
   const [supplierId, setSupplierId] = useState<string>("none");
   const [estimatedHours, setEstimatedHours] = useState<string>("");
   const [tags, setTags] = useState<string[]>([]);
@@ -62,37 +66,58 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<"basic" | "extra">("basic");
 
+  // Verifica se a aba "Detalhes" tem algum campo visível
+  const hasExtraTab = isTaskFieldVisible("tags") || isTaskFieldVisible("notes");
+
   useEffect(() => {
     if (open) {
       if (editTask) {
         setTitle(editTask.title || "");
         setDescription(editTask.description || "");
         setDueDate(editTask.due_date ? editTask.due_date.split("T")[0] : getTodayStr());
-        setPriority(editTask.priority || "medium");
+        setPriority(editTask.priority || defaultPriority);
         setSupplierId(editTask.supplier_id || "none");
         setEstimatedHours(editTask.estimated_hours ? String(editTask.estimated_hours) : "");
         setTags(editTask.tags || []);
         setNotes(editTask.notes || "");
       } else {
         setTitle(""); setDescription(""); setDueDate(getTodayStr());
-        setPriority("medium"); setSupplierId("none");
+        setPriority(defaultPriority); setSupplierId("none");
         setEstimatedHours(""); setTags([]); setNotes("");
       }
       setErrors({});
       setActiveTab("basic");
       setTagInput("");
     }
-  }, [open, editTask]);
+  }, [open, editTask, defaultPriority]);
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
     if (!title.trim()) errs.title = "O título é obrigatório.";
+
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const selectedDate = new Date(dueDate + "T12:00:00");
     if (selectedDate < today) errs.dueDate = "A data não pode ser retroativa.";
+
+    if (isTaskFieldRequired("description") && isTaskFieldVisible("description") && !description.trim()) {
+      errs.description = "A descrição é obrigatória.";
+    }
+    if (isTaskFieldRequired("estimated_hours") && isTaskFieldVisible("estimated_hours") && !estimatedHours) {
+      errs.estimatedHours = "As horas estimadas são obrigatórias.";
+    }
     if (estimatedHours && (isNaN(Number(estimatedHours)) || Number(estimatedHours) < 0)) {
       errs.estimatedHours = "Informe um número válido.";
     }
+    if (isTaskFieldRequired("supplier_id") && isTaskFieldVisible("supplier_id") && supplierId === "none") {
+      errs.supplierId = "O fornecedor é obrigatório.";
+    }
+    if (isTaskFieldRequired("tags") && isTaskFieldVisible("tags") && tags.length === 0) {
+      errs.tags = "Adicione ao menos uma etiqueta.";
+    }
+    if (isTaskFieldRequired("notes") && isTaskFieldVisible("notes") && !notes.trim()) {
+      errs.notes = "As observações são obrigatórias.";
+    }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -102,13 +127,13 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
 
     const data: TaskFormData = {
       title: title.trim(),
-      description: description.trim() || undefined,
+      description: isTaskFieldVisible("description") ? (description.trim() || undefined) : undefined,
       due_date: new Date(dueDate + "T12:00:00").toISOString(),
       priority,
-      supplier_id: supplierId === "none" ? undefined : supplierId,
-      estimated_hours: estimatedHours ? Number(estimatedHours) : undefined,
-      tags: tags.length > 0 ? tags : undefined,
-      notes: notes.trim() || undefined,
+      supplier_id: isTaskFieldVisible("supplier_id") && supplierId !== "none" ? supplierId : undefined,
+      estimated_hours: isTaskFieldVisible("estimated_hours") && estimatedHours ? Number(estimatedHours) : undefined,
+      tags: isTaskFieldVisible("tags") && tags.length > 0 ? tags : undefined,
+      notes: isTaskFieldVisible("notes") ? (notes.trim() || undefined) : undefined,
     };
 
     if (isEditing && onUpdate && editTask) {
@@ -140,6 +165,22 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
     }
   }
 
+  // Helper para label com indicador de obrigatório dinâmico
+  function FieldLabel({ fieldKey, icon, children }: {
+    fieldKey: keyof typeof settings.tasks.fields;
+    icon?: React.ReactNode;
+    children: React.ReactNode;
+  }) {
+    const required = isTaskFieldRequired(fieldKey);
+    return (
+      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+        {icon}
+        {children}
+        {required && <span className="text-destructive ml-0.5">*</span>}
+      </Label>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden rounded-2xl">
@@ -159,32 +200,34 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="flex gap-1 mt-4 bg-muted/50 rounded-xl p-1">
-            {[{ id: "basic" as const, label: "Básico" }, { id: "extra" as const, label: "Detalhes" }].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  "flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all duration-200",
-                  activeTab === tab.id
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          {/* Tabs — só exibe "Detalhes" se tiver algo lá */}
+          {hasExtraTab && (
+            <div className="flex gap-1 mt-4 bg-muted/50 rounded-xl p-1">
+              {[{ id: "basic" as const, label: "Básico" }, { id: "extra" as const, label: "Detalhes" }].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    "flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all duration-200",
+                    activeTab === tab.id
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
         </DialogHeader>
 
         <div className="px-6 py-5 space-y-5 max-h-[60vh] overflow-y-auto">
-          {activeTab === "basic" && (
+          {(activeTab === "basic" || !hasExtraTab) && (
             <>
-              {/* Título */}
+              {/* Título — sempre visível */}
               <div className="space-y-1.5">
                 <Label htmlFor="title" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Título *
+                  Título <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="title"
@@ -198,53 +241,54 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
               </div>
 
               {/* Descrição */}
-              <div className="space-y-1.5">
-                <Label htmlFor="desc" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Descrição
-                </Label>
-                <Textarea
-                  id="desc"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Descreva o que precisa ser feito..."
-                  className="resize-none rounded-xl text-sm min-h-[80px]"
-                  rows={3}
-                />
-              </div>
-
-              {/* Prioridade — Cards visuais */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Prioridade
-                </Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {PRIORITY_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setPriority(opt.value as Priority)}
-                      className={cn(
-                        "flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 transition-all text-center",
-                        priority === opt.value
-                          ? `${opt.bgColor} ${opt.borderColor}`
-                          : "border-border/60 hover:border-border bg-card"
-                      )}
-                    >
-                      <span className="text-base">{opt.emoji}</span>
-                      <span className={cn("text-[11px] font-bold", priority === opt.value ? opt.textColor : "text-muted-foreground")}>
-                        {opt.label}
-                      </span>
-                      <span className="text-[9px] text-muted-foreground/70 hidden sm:block">{opt.desc}</span>
-                    </button>
-                  ))}
+              {isTaskFieldVisible("description") && (
+                <div className="space-y-1.5">
+                  <FieldLabel fieldKey="description">Descrição</FieldLabel>
+                  <Textarea
+                    id="desc"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Descreva o que precisa ser feito..."
+                    className={cn("resize-none rounded-xl text-sm min-h-[80px]", errors.description && "border-destructive")}
+                    rows={3}
+                  />
+                  {errors.description && <p className="text-xs text-destructive font-medium">{errors.description}</p>}
                 </div>
-              </div>
+              )}
 
-              <div className="grid grid-cols-2 gap-3">
-                {/* Data de Vencimento */}
+              {/* Prioridade */}
+              {isTaskFieldVisible("priority") && (
+                <div className="space-y-1.5">
+                  <FieldLabel fieldKey="priority">Prioridade</FieldLabel>
+                  <div className="grid grid-cols-3 gap-2">
+                    {PRIORITY_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setPriority(opt.value as Priority)}
+                        className={cn(
+                          "flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 transition-all text-center",
+                          priority === opt.value
+                            ? `${opt.bgColor} ${opt.borderColor}`
+                            : "border-border/60 hover:border-border bg-card"
+                        )}
+                      >
+                        <span className="text-base">{opt.emoji}</span>
+                        <span className={cn("text-[11px] font-bold", priority === opt.value ? opt.textColor : "text-muted-foreground")}>
+                          {opt.label}
+                        </span>
+                        <span className="text-[9px] text-muted-foreground/70 hidden sm:block">{opt.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className={cn("gap-3", isTaskFieldVisible("estimated_hours") ? "grid grid-cols-2" : "")}>
+                {/* Data de Vencimento — sempre visível */}
                 <div className="space-y-1.5">
                   <Label htmlFor="due" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                    <CalendarDays className="h-3 w-3" /> Vencimento
+                    <CalendarDays className="h-3 w-3" /> Vencimento <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="due"
@@ -257,125 +301,101 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
                 </div>
 
                 {/* Horas Estimadas */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="hours" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                    <Clock className="h-3 w-3" /> Horas estimadas
-                  </Label>
-                  <Input
-                    id="hours"
-                    type="text"
-                    inputMode="decimal"
-                    value={estimatedHours}
-                    onChange={(e) => setEstimatedHours(maskHours(e.target.value))}
-                    placeholder="Ex: 2 ou 1.5"
-                    maxLength={5}
-                    className={cn("text-sm rounded-xl h-10", errors.estimatedHours && "border-destructive")}
-                  />
-                  {errors.estimatedHours && <p className="text-xs text-destructive font-medium">{errors.estimatedHours}</p>}
-                </div>
+                {isTaskFieldVisible("estimated_hours") && (
+                  <div className="space-y-1.5">
+                    <FieldLabel fieldKey="estimated_hours" icon={<Clock className="h-3 w-3" />}>
+                      Horas estimadas
+                    </FieldLabel>
+                    <Input
+                      id="hours"
+                      type="text"
+                      inputMode="decimal"
+                      value={estimatedHours}
+                      onChange={(e) => setEstimatedHours(maskHours(e.target.value))}
+                      placeholder="Ex: 2 ou 1.5"
+                      maxLength={5}
+                      className={cn("text-sm rounded-xl h-10", errors.estimatedHours && "border-destructive")}
+                    />
+                    {errors.estimatedHours && <p className="text-xs text-destructive font-medium">{errors.estimatedHours}</p>}
+                  </div>
+                )}
               </div>
 
               {/* Fornecedor */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                  <Building2 className="h-3 w-3" /> Fornecedor vinculado
-                </Label>
-                <Select value={supplierId} onValueChange={setSupplierId}>
-                  <SelectTrigger className="w-full bg-background rounded-xl h-10 text-sm">
-                    <SelectValue placeholder="Selecione um fornecedor" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    <SelectItem value="none">
-                      <span className="text-muted-foreground">Sem fornecedor vinculado</span>
-                    </SelectItem>
-                    {suppliers.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        <div className="flex items-center gap-2">
-                          <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 shrink-0">
-                            <Building2 className="h-3 w-3 text-primary" />
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="font-medium text-sm">{s.name}</span>
-                            {s.location_name && (
-                              <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                                <MapPin className="h-2.5 w-2.5" /> {s.location_name}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+              {isTaskFieldVisible("supplier_id") && (
+                <div className="space-y-1.5">
+                  <FieldLabel fieldKey="supplier_id" icon={<Building2 className="h-3 w-3" />}>
+                    Fornecedor vinculado
+                  </FieldLabel>
+                  <Select value={supplierId} onValueChange={setSupplierId}>
+                    <SelectTrigger className={cn("w-full bg-background rounded-xl h-10 text-sm", errors.supplierId && "border-destructive")}>
+                      <SelectValue placeholder="Selecione um fornecedor" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="none">
+                        <span className="text-muted-foreground">Sem fornecedor vinculado</span>
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                      {suppliers.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 shrink-0">
+                              <Building2 className="h-3 w-3 text-primary" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-medium text-sm">{s.name}</span>
+                              {s.location_name && (
+                                <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                                  <MapPin className="h-2.5 w-2.5" /> {s.location_name}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.supplierId && <p className="text-xs text-destructive font-medium">{errors.supplierId}</p>}
+                </div>
+              )}
+
+              {/* Tags e Notas inline quando não há aba extra */}
+              {!hasExtraTab && (
+                <>
+                  {isTaskFieldVisible("tags") && (
+                    <TagsField
+                      tags={tags} tagInput={tagInput} tagInputRef={tagInputRef}
+                      setTagInput={setTagInput} addTag={addTag} removeTag={removeTag}
+                      handleTagKeyDown={handleTagKeyDown} error={errors.tags}
+                      required={isTaskFieldRequired("tags")}
+                    />
+                  )}
+                  {isTaskFieldVisible("notes") && (
+                    <NotesField
+                      notes={notes} setNotes={setNotes} error={errors.notes}
+                      required={isTaskFieldRequired("notes")}
+                    />
+                  )}
+                </>
+              )}
             </>
           )}
 
-          {activeTab === "extra" && (
+          {activeTab === "extra" && hasExtraTab && (
             <>
-              {/* Tags */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                  <Tag className="h-3 w-3" /> Etiquetas
-                </Label>
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {PRESET_TAGS.map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => tags.includes(preset) ? removeTag(preset) : addTag(preset)}
-                      className={cn(
-                        "text-[11px] font-medium px-2.5 py-1 rounded-full border transition-all",
-                        tags.includes(preset)
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                      )}
-                    >
-                      {preset}
-                    </button>
-                  ))}
-                </div>
-
-                <div
-                  className="flex flex-wrap gap-1.5 p-2.5 rounded-xl border border-border/80 bg-background min-h-[44px] cursor-text"
-                  onClick={() => tagInputRef.current?.focus()}
-                >
-                  {tags.map((tag) => (
-                    <span key={tag} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-[11px] font-semibold rounded-full px-2.5 py-1">
-                      {tag}
-                      <button type="button" onClick={() => removeTag(tag)} className="hover:text-destructive transition-colors">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
-                  <input
-                    ref={tagInputRef}
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={handleTagKeyDown}
-                    onBlur={() => tagInput && addTag(tagInput)}
-                    placeholder={tags.length === 0 ? "Digite e pressione Enter..." : ""}
-                    className="flex-1 min-w-[120px] outline-none bg-transparent text-[11px] text-foreground placeholder:text-muted-foreground/50"
-                  />
-                </div>
-                <p className="text-[10px] text-muted-foreground">Pressione Enter ou vírgula para adicionar uma etiqueta.</p>
-              </div>
-
-              {/* Observações */}
-              <div className="space-y-1.5">
-                <Label htmlFor="notes" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                  <StickyNote className="h-3 w-3" /> Observações internas
-                </Label>
-                <Textarea
-                  id="notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Anotações privadas, instruções extras, contexto adicional..."
-                  className="resize-none rounded-xl text-sm min-h-[100px]"
-                  rows={4}
+              {isTaskFieldVisible("tags") && (
+                <TagsField
+                  tags={tags} tagInput={tagInput} tagInputRef={tagInputRef}
+                  setTagInput={setTagInput} addTag={addTag} removeTag={removeTag}
+                  handleTagKeyDown={handleTagKeyDown} error={errors.tags}
+                  required={isTaskFieldRequired("tags")}
                 />
-                <p className="text-[10px] text-muted-foreground">Visível apenas para você. Não aparece nos relatórios.</p>
-              </div>
+              )}
+              {isTaskFieldVisible("notes") && (
+                <NotesField
+                  notes={notes} setNotes={setNotes} error={errors.notes}
+                  required={isTaskFieldRequired("notes")}
+                />
+              )}
             </>
           )}
         </div>
@@ -391,5 +411,75 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── Sub-componentes reutilizáveis ────────────────────────────
+function TagsField({ tags, tagInput, tagInputRef, setTagInput, addTag, removeTag, handleTagKeyDown, error, required }: any) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+        <Tag className="h-3 w-3" /> Etiquetas{required && <span className="text-destructive">*</span>}
+      </Label>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {["Compras","Reunião","Entrega","Revisão","Pagamento","Ligação","Vistoria"].map((preset) => (
+          <button
+            key={preset}
+            type="button"
+            onClick={() => tags.includes(preset) ? removeTag(preset) : addTag(preset)}
+            className={cn(
+              "text-[11px] font-medium px-2.5 py-1 rounded-full border transition-all",
+              tags.includes(preset)
+                ? "bg-primary text-primary-foreground border-primary"
+                : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+            )}
+          >
+            {preset}
+          </button>
+        ))}
+      </div>
+      <div
+        className="flex flex-wrap gap-1.5 p-2.5 rounded-xl border border-border/80 bg-background min-h-[44px] cursor-text"
+        onClick={() => tagInputRef.current?.focus()}
+      >
+        {tags.map((tag: string) => (
+          <span key={tag} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-[11px] font-semibold rounded-full px-2.5 py-1">
+            {tag}
+            <button type="button" onClick={() => removeTag(tag)} className="hover:text-destructive transition-colors">
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        <input
+          ref={tagInputRef}
+          value={tagInput}
+          onChange={(e) => setTagInput(e.target.value)}
+          onKeyDown={handleTagKeyDown}
+          onBlur={() => tagInput && addTag(tagInput)}
+          placeholder={tags.length === 0 ? "Digite e pressione Enter..." : ""}
+          className="flex-1 min-w-[120px] outline-none bg-transparent text-[11px] text-foreground placeholder:text-muted-foreground/50"
+        />
+      </div>
+      {error && <p className="text-xs text-destructive font-medium">{error}</p>}
+    </div>
+  );
+}
+
+function NotesField({ notes, setNotes, error, required }: any) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor="notes" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+        <StickyNote className="h-3 w-3" /> Observações internas{required && <span className="text-destructive">*</span>}
+      </Label>
+      <Textarea
+        id="notes"
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="Anotações privadas, instruções extras, contexto adicional..."
+        className={cn("resize-none rounded-xl text-sm min-h-[100px]", error && "border-destructive")}
+        rows={4}
+      />
+      {error && <p className="text-xs text-destructive font-medium">{error}</p>}
+    </div>
   );
 }
