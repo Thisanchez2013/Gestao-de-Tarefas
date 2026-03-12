@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import AlterarSenha from "./pages/AlterarSenha";
 import Settings from "./pages/Settings";
+import Timeline from "./pages/Timeline";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,16 @@ const App = () => (
               <ProtectedRoute>
                 <SettingsProvider>
                   <Settings />
+                </SettingsProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/timeline"
+            element={
+              <ProtectedRoute>
+                <SettingsProvider>
+                  <Timeline />
                 </SettingsProvider>
               </ProtectedRoute>
             }

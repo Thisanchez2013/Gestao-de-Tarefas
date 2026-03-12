@@ -29,6 +29,7 @@ import {
   Building2,
   KeyRound,
   Settings2,
+  CalendarDays,
 } from "lucide-react";
 import type { Task } from "@/types/task";
 import { motion, AnimatePresence } from "framer-motion";
@@ -136,6 +137,17 @@ const Index = () => {
               <Plus className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Nova Tarefa</span>
               <span className="sm:hidden">Tarefa</span>
+            </Button>
+
+            {/* Timeline */}
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => navigate("/timeline")}
+              className="h-8 w-8 rounded-xl text-muted-foreground hover:text-foreground"
+              title="Timeline do dia"
+            >
+              <CalendarDays className="h-4 w-4" />
             </Button>
 
             {/* Configurações */}
