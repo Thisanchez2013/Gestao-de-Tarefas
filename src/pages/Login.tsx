@@ -1,89 +1,124 @@
 // src/pages/Login.tsx
 import { useState } from "react";
-import { supabase, getEmailByUsername } from "@/lib/supabase";
+import { supabase, isUsernameTaken } from "@/lib/supabase";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { LogIn, UserPlus, CheckSquare, ArrowRight, Eye, EyeOff, Mail, AtSign } from "lucide-react";
+import {
+  LogIn, UserPlus, CheckSquare, ArrowRight,
+  Eye, EyeOff, Mail, AtSign, User,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+  // ── Cadastro ────────────────────────────────────────────────
+  const [regName,     setRegName]     = useState("");
+  const [regUsername, setRegUsername] = useState("");
+  const [regEmail,    setRegEmail]    = useState("");
+  const [regPassword, setRegPassword] = useState("");
+
+  // ── Login ───────────────────────────────────────────────────
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+
+  // ── UI ──────────────────────────────────────────────────────
+  const [showPassword,  setShowPassword]  = useState(false);
+  const [loading,       setLoading]       = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
 
-  const [loginUsername, setLoginUsername] = useState("");
+  const navigate    = useNavigate();
+  const { toast }   = useToast();
 
-  const navigate = useNavigate();
-  const { toast } = useToast();
-
+  // ════════════════════════════════════════════════════════════
+  // CADASTRO — o trigger on_auth_user_created cuida do profiles
+  // ════════════════════════════════════════════════════════════
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim()) {
+
+    if (!regUsername.trim()) {
       toast({ variant: "destructive", title: "Informe um nome de usuário." });
       return;
     }
-    if (username.includes(" ")) {
-      toast({ variant: "destructive", title: "O nome de usuário não pode ter espaços." });
+    if (regPassword.length < 6) {
+      toast({ variant: "destructive", title: "A senha precisa ter no mínimo 6 caracteres." });
       return;
     }
 
     setLoading(true);
     try {
-      const { data: existing } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('username', username.toLowerCase().trim())
-        .maybeSingle();
-
-      if (existing) {
-        toast({ variant: "destructive", title: "Usuário já existe", description: "Escolha outro nome de usuário." });
+      // 1. Verifica se username já existe na tabela profiles
+      const taken = await isUsernameTaken(regUsername);
+      if (taken) {
+        toast({ variant: "destructive", title: "Nome de usuário já em uso", description: "Escolha outro." });
         return;
       }
 
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) throw error;
+      // 2. Cria o usuário no Supabase Auth.
+      //    O trigger on_auth_user_created vai automaticamente:
+      //    - criar a linha em profiles com id + email
+      //    - preencher username e name a partir de options.data
+      //    Não é necessário nenhum INSERT/UPDATE manual em profiles.
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: regEmail.trim().toLowerCase(),
+        password: regPassword,
+        options: {
+          data: {
+            username: regUsername.toLowerCase().trim(),
+            name: regName.trim() || null,
+          },
+        },
+      });
 
-      // ✅ UPDATE em vez de INSERT — trigger já cria o perfil automaticamente
-      if (data.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ username: username.toLowerCase().trim() })
-          .eq('id', data.user.id);
-
-        if (profileError) throw profileError;
-      }
+      if (signUpError) throw signUpError;
+      if (!data.user) throw new Error("Falha ao criar usuário.");
 
       toast({
-        title: "Conta criada!",
-        description: "Verifique seu e-mail para confirmar o acesso.",
+        title: "Conta criada com sucesso! 🎉",
+        description: data.session
+          ? "Redirecionando..."
+          : "Verifique seu e-mail para confirmar o acesso.",
       });
+
+      // Se email confirmation está desabilitado → usuário já tem sessão
+      if (data.session) {
+        navigate("/");
+      } else {
+        setIsRegistering(false);
+        resetForm();
+      }
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Erro", description: error.message });
+      toast({ variant: "destructive", title: "Erro ao criar conta", description: error.message });
     } finally {
       setLoading(false);
     }
   };
 
+  // ════════════════════════════════════════════════════════════
+  // LOGIN
+  // Fluxo:
+  //  1. Busca o email em profiles pelo username informado
+  //  2. Autentica com email + senha no Supabase Auth
+  // ════════════════════════════════════════════════════════════
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    const input = loginUsername.trim();
+
+    if (!input) {
+      toast({ variant: "destructive", title: "Informe o nome de usuário." });
+      return;
+    }
+
     setLoading(true);
-
     try {
-      const input = loginUsername.trim();
+      // Busca o email associado ao username na tabela profiles
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("username", input.toLowerCase())
+        .maybeSingle();
 
-      if (!input) {
-        toast({ variant: "destructive", title: "Informe o nome de usuário." });
-        return;
-      }
-
-      const emailToUse = await getEmailByUsername(input);
-
-      if (!emailToUse) {
+      if (!profileData?.email) {
         toast({
           variant: "destructive",
           title: "Usuário não encontrado",
@@ -92,7 +127,12 @@ export default function Login() {
         return;
       }
 
-      const { error } = await supabase.auth.signInWithPassword({ email: emailToUse, password });
+      // Autentica via Supabase Auth com o email encontrado
+      const { error } = await supabase.auth.signInWithPassword({
+        email: profileData.email,
+        password: loginPassword,
+      });
+
       if (error) throw error;
 
       toast({ title: "Bem-vindo de volta! 👋" });
@@ -105,14 +145,16 @@ export default function Login() {
   };
 
   const resetForm = () => {
-    setEmail("");
-    setUsername("");
-    setPassword("");
-    setLoginUsername("");
+    setRegName(""); setRegUsername(""); setRegEmail(""); setRegPassword("");
+    setLoginUsername(""); setLoginPassword("");
   };
 
+  // ════════════════════════════════════════════════════════════
+  // UI
+  // ════════════════════════════════════════════════════════════
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background relative overflow-hidden">
+      {/* Background decoration */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-primary/8 blur-3xl" />
         <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-primary/6 blur-3xl" />
@@ -125,6 +167,7 @@ export default function Login() {
         transition={{ duration: 0.4, ease: "easeOut" }}
         className="relative z-10 w-full max-w-[400px] px-5"
       >
+        {/* Brand */}
         <div className="text-center mb-8">
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
@@ -142,6 +185,7 @@ export default function Login() {
           </p>
         </div>
 
+        {/* Card */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -161,6 +205,8 @@ export default function Login() {
             </p>
 
             <AnimatePresence mode="wait">
+
+              {/* ── CADASTRO ─────────────────────────────── */}
               {isRegistering ? (
                 <motion.form
                   key="register"
@@ -171,6 +217,25 @@ export default function Login() {
                   onSubmit={handleRegister}
                   className="space-y-4"
                 >
+                  {/* Nome completo */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground/80">
+                      Nome completo <span className="font-normal text-muted-foreground">(opcional)</span>
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        type="text"
+                        placeholder="Seu nome"
+                        className="h-10 rounded-xl text-sm bg-background border-border/80 focus-visible:ring-primary/25 pl-9"
+                        value={regName}
+                        onChange={(e) => setRegName(e.target.value)}
+                        autoComplete="name"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Username */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-foreground/80">
                       Nome de usuário
@@ -181,8 +246,8 @@ export default function Login() {
                         type="text"
                         placeholder="seunome"
                         className="h-10 rounded-xl text-sm bg-background border-border/80 focus-visible:ring-primary/25 pl-9"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value.replace(/\s/g, ""))}
+                        value={regUsername}
+                        onChange={(e) => setRegUsername(e.target.value.replace(/\s/g, "").toLowerCase())}
                         required
                         autoComplete="username"
                       />
@@ -192,6 +257,7 @@ export default function Login() {
                     </p>
                   </div>
 
+                  {/* Email */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-foreground/80">E-mail</label>
                     <div className="relative">
@@ -200,17 +266,18 @@ export default function Login() {
                         type="email"
                         placeholder="seu@email.com"
                         className="h-10 rounded-xl text-sm bg-background border-border/80 focus-visible:ring-primary/25 pl-9"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        value={regEmail}
+                        onChange={(e) => setRegEmail(e.target.value)}
                         required
                         autoComplete="email"
                       />
                     </div>
                     <p className="text-[10px] text-muted-foreground pl-0.5">
-                      Usado apenas para confirmação de conta. Não precisará dele para entrar.
+                      Usado para confirmação. Você entrará com o nome de usuário.
                     </p>
                   </div>
 
+                  {/* Senha */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-foreground/80">Senha</label>
                     <div className="relative">
@@ -218,8 +285,8 @@ export default function Login() {
                         type={showPassword ? "text" : "password"}
                         placeholder="Mínimo 6 caracteres"
                         className="h-10 rounded-xl text-sm bg-background border-border/80 focus-visible:ring-primary/25 pr-10"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        value={regPassword}
+                        onChange={(e) => setRegPassword(e.target.value)}
                         required
                         autoComplete="new-password"
                       />
@@ -251,6 +318,7 @@ export default function Login() {
                 </motion.form>
 
               ) : (
+                /* ── LOGIN ───────────────────────────────── */
                 <motion.form
                   key="login"
                   initial={{ opacity: 0, x: -16 }}
@@ -260,6 +328,7 @@ export default function Login() {
                   onSubmit={handleLogin}
                   className="space-y-4"
                 >
+                  {/* Username */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-foreground/80">
                       Nome de usuário
@@ -279,6 +348,7 @@ export default function Login() {
                     </div>
                   </div>
 
+                  {/* Senha */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-foreground/80">Senha</label>
                     <div className="relative">
@@ -286,8 +356,8 @@ export default function Login() {
                         type={showPassword ? "text" : "password"}
                         placeholder="Sua senha"
                         className="h-10 rounded-xl text-sm bg-background border-border/80 focus-visible:ring-primary/25 pr-10"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
                         required
                         autoComplete="current-password"
                       />
@@ -320,10 +390,11 @@ export default function Login() {
               )}
             </AnimatePresence>
 
+            {/* Toggle cadastro ↔ login */}
             <div className="mt-5 text-center">
               <button
                 type="button"
-                onClick={() => { setIsRegistering(!isRegistering); resetForm(); }}
+                onClick={() => { setIsRegistering(!isRegistering); resetForm(); setShowPassword(false); }}
                 className="text-xs text-muted-foreground hover:text-primary transition-colors underline underline-offset-2 decoration-muted-foreground/40"
               >
                 {isRegistering
@@ -337,7 +408,6 @@ export default function Login() {
         <p className="text-center text-[10px] text-muted-foreground/50 mt-8 uppercase tracking-widest">
           © {new Date().getFullYear()} TaskFlow
         </p>
-
       </motion.div>
     </div>
   );

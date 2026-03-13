@@ -14,7 +14,6 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
 
-  // Estado LOCAL do timer — não depende do task prop para re-renderizar
   const [localRunning, setLocalRunning] = useState<boolean>(
     !!task.timer_running && !!task.timer_started_at
   );
@@ -27,7 +26,6 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
   const [elapsed, setElapsed] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Sincroniza estado local quando a tarefa muda (troca de modal)
   const prevTaskIdRef = useRef(task.id);
   useEffect(() => {
     if (prevTaskIdRef.current !== task.id) {
@@ -38,7 +36,6 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
     }
   }, [task.id, task.timer_running, task.timer_started_at, task.total_tracked_seconds]);
 
-  // Calcula elapsed inicial quando começa a rodar
   useEffect(() => {
     if (localRunning && localStartedAt) {
       const diff = Math.floor(
@@ -50,7 +47,6 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
     }
   }, [localRunning, localStartedAt]);
 
-  // Tick do relógio
   useEffect(() => {
     if (localRunning) {
       intervalRef.current = setInterval(() => {
@@ -64,7 +60,6 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
     };
   }, [localRunning]);
 
-  // Busca as entradas de tempo da tarefa
   const fetchEntries = useCallback(async () => {
     setLoadingEntries(true);
     try {
@@ -89,23 +84,14 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
   // ─── INICIA ───────────────────────────────────────────────
   const start = useCallback(async () => {
     const startedAt = new Date().toISOString();
-
     setLocalRunning(true);
     setLocalStartedAt(startedAt);
     setElapsed(0);
-
-    onUpdate(task.id, {
-      timer_running: true,
-      timer_started_at: startedAt,
-    });
+    onUpdate(task.id, { timer_running: true, timer_started_at: startedAt });
 
     const { error } = await supabase
       .from("tasks")
-      .update({
-        timer_running: true,
-        timer_started_at: startedAt,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ timer_running: true, timer_started_at: startedAt, updated_at: new Date().toISOString() })
       .eq("id", task.id);
 
     if (error) {
@@ -117,10 +103,9 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
     }
   }, [task.id, onUpdate, toast]);
 
-  // ─── PARA (com nota opcional) ─────────────────────────────
+  // ─── PARA ─────────────────────────────────────────────────
   const stop = useCallback(async (note?: string) => {
     if (!localStartedAt) return;
-
     const endedAt = new Date().toISOString();
     const sessionSeconds = Math.floor(
       (new Date(endedAt).getTime() - new Date(localStartedAt).getTime()) / 1000
@@ -131,12 +116,7 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
     setLocalStartedAt(null);
     setLocalTotal(newTotal);
     setElapsed(0);
-
-    onUpdate(task.id, {
-      timer_running: false,
-      timer_started_at: null,
-      total_tracked_seconds: newTotal,
-    });
+    onUpdate(task.id, { timer_running: false, timer_started_at: null, total_tracked_seconds: newTotal });
 
     const { data: { user } } = await supabase.auth.getUser();
     const entry = {
@@ -149,15 +129,12 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
     };
 
     const [taskRes, entryRes] = await Promise.all([
-      supabase
-        .from("tasks")
-        .update({
-          timer_running: false,
-          timer_started_at: null,
-          total_tracked_seconds: newTotal,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", task.id),
+      supabase.from("tasks").update({
+        timer_running: false,
+        timer_started_at: null,
+        total_tracked_seconds: newTotal,
+        updated_at: new Date().toISOString(),
+      }).eq("id", task.id),
       supabase.from("time_entries").insert([entry]).select().single(),
     ]);
 
@@ -175,10 +152,11 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
     setLocalStartedAt(null);
     setElapsed(0);
     onUpdate(task.id, { timer_running: false, timer_started_at: null });
-    await supabase
-      .from("tasks")
-      .update({ timer_running: false, timer_started_at: null, updated_at: new Date().toISOString() })
-      .eq("id", task.id);
+    await supabase.from("tasks").update({
+      timer_running: false,
+      timer_started_at: null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", task.id);
   }, [task.id, onUpdate]);
 
   // ─── DELETA ENTRADA ───────────────────────────────────────
@@ -198,6 +176,58 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
     toast({ title: "Sessão removida" });
   }, [localTotal, task.id, onUpdate, toast]);
 
+  // ─── EDITA ENTRADA ────────────────────────────────────────
+  const editEntry = useCallback(async (
+    entryId: string,
+    oldDuration: number,
+    patch: { started_at?: string; ended_at?: string; note?: string }
+  ) => {
+    // Recalcula duration a partir dos novos horários
+    const entry = timeEntries.find((e) => e.id === entryId);
+    if (!entry) return;
+
+    const newStarted = patch.started_at ?? entry.started_at;
+    const newEnded   = patch.ended_at   ?? entry.ended_at ?? new Date().toISOString();
+    const newDuration = Math.max(
+      0,
+      Math.floor((new Date(newEnded).getTime() - new Date(newStarted).getTime()) / 1000)
+    );
+
+    const diff = newDuration - oldDuration;
+    const newTotal = Math.max(0, localTotal + diff);
+
+    // Atualiza estado local imediatamente
+    setTimeEntries((prev) =>
+      prev.map((e) =>
+        e.id === entryId
+          ? { ...e, started_at: newStarted, ended_at: newEnded, duration_seconds: newDuration, note: patch.note ?? e.note }
+          : e
+      )
+    );
+    setLocalTotal(newTotal);
+    onUpdate(task.id, { total_tracked_seconds: newTotal });
+
+    const [entryRes, taskRes] = await Promise.all([
+      supabase.from("time_entries").update({
+        started_at: newStarted,
+        ended_at: newEnded,
+        duration_seconds: newDuration,
+        note: patch.note !== undefined ? (patch.note.trim() || null) : entry.note,
+      }).eq("id", entryId),
+      supabase.from("tasks").update({
+        total_tracked_seconds: newTotal,
+        updated_at: new Date().toISOString(),
+      }).eq("id", task.id),
+    ]);
+
+    if (entryRes.error) {
+      toast({ variant: "destructive", title: "Erro ao editar sessão", description: entryRes.error.message });
+      fetchEntries(); // recarrega estado real do banco
+    } else {
+      toast({ title: "Sessão atualizada" });
+    }
+  }, [timeEntries, localTotal, task.id, onUpdate, toast, fetchEntries]);
+
   return {
     isRunning: localRunning,
     elapsed,
@@ -208,6 +238,7 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
     stop,
     discard,
     deleteEntry,
+    editEntry,
     refetchEntries: fetchEntries,
   };
 }

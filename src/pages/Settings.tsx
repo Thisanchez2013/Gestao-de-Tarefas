@@ -21,6 +21,7 @@ import {
   Zap,
   Bell,
   ArrowLeft,
+  Timer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -493,6 +494,38 @@ export default function Settings() {
                         checked={settings.system.autoCloseModalOnComplete}
                         onChange={(v) => { updateSystem({ autoCloseModalOnComplete: v }); handleChange(); }}
                       />
+
+                      {/* Modo de tempo */}
+                      <div className="flex items-center justify-between rounded-xl border border-border/60 bg-card px-4 py-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                            <Timer className="h-3.5 w-3.5 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground">Modo de rastreamento de tempo</p>
+                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                              {settings.system.task_time_mode === "session_based"
+                                ? "Sessões: cada acionamento do timer cria uma atuação registrada com histórico."
+                                : "Simples: cronômetro acumulativo único por tarefa, sem histórico de sessões."}
+                            </p>
+                          </div>
+                        </div>
+                        <Select
+                          value={settings.system.task_time_mode}
+                          onValueChange={(v) => {
+                            updateSystem({ task_time_mode: v as "simple" | "session_based" });
+                            handleChange();
+                          }}
+                        >
+                          <SelectTrigger className="w-36 h-8 text-xs rounded-lg shrink-0 ml-4">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="session_based">⏱ Por sessões</SelectItem>
+                            <SelectItem value="simple">🕐 Simples</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
 
                       {/* Prioridade padrão */}
                       <div className="flex items-center justify-between rounded-xl border border-border/60 bg-card px-4 py-3">

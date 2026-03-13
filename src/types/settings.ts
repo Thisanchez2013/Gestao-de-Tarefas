@@ -39,11 +39,14 @@ export interface InterfaceSettings {
   animationsEnabled: boolean;
 }
 
+export type TaskTimeMode = "simple" | "session_based";
+
 export interface SystemSettings {
   confirmBeforeDelete: boolean;
   autoCloseModalOnComplete: boolean;
   defaultPriority: "high" | "medium" | "low";
   defaultTab: "tasks" | "suppliers" | "trash";
+  task_time_mode: TaskTimeMode;
 }
 
 export interface AppSettings {
@@ -91,5 +94,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
     autoCloseModalOnComplete:  true,
     defaultPriority:           "medium",
     defaultTab:                "tasks",
+    task_time_mode:            "session_based",
   },
 };
