@@ -277,14 +277,25 @@ function TimeBlock({ entry, index, onSelect, columnOffset = 0, columnWidth = 1 }
   columnOffset?: number;
   columnWidth?: number;
 }) {
-  const c        = P[entry.task_priority];
+  const c         = P[entry.task_priority];
   const isRunning = !entry.ended_at;
-  const topPx    = isoToTopPx(entry.started_at);
-  const endISO   = entry.ended_at ?? new Date().toISOString();
-  const mins     = diffMinutes(entry.started_at, endISO);
-  const heightPx = Math.max(minutesToPx(mins), 24);
+  const topPx     = isoToTopPx(entry.started_at);
+  const endISO    = entry.ended_at ?? new Date().toISOString();
+  const mins      = diffMinutes(entry.started_at, endISO);
+  const heightPx  = Math.max(minutesToPx(mins), 24);
+
+  const isShort  = heightPx < 28;
+  const isMedium = heightPx >= 28;
   const isTall   = heightPx > 52;
-  const isShort  = heightPx < 36;
+
+  // Prioriza nota da sessão (digitada ao parar o timer), depois descrição da tarefa
+  const displayText = entry.note?.trim() || entry.task_description?.trim() || null;
+  const maxChars = 100;
+  const shortText = displayText
+    ? displayText.length > maxChars
+      ? displayText.slice(0, maxChars) + "…"
+      : displayText
+    : null;
 
   return (
     <motion.button
@@ -292,14 +303,14 @@ function TimeBlock({ entry, index, onSelect, columnOffset = 0, columnWidth = 1 }
       animate={{ opacity: 1, scaleY: 1,   x: 0  }}
       transition={{ delay: index * 0.045, duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
       style={{
-        position:      "absolute",
-        top:           topPx,
-        height:        heightPx,
-        left:          `${columnOffset * 100}%`,
-        width:         `${columnWidth * 100}%`,
+        position:        "absolute",
+        top:             topPx,
+        height:          heightPx,
+        left:            `${columnOffset * 100}%`,
+        width:           `${columnWidth * 100}%`,
         transformOrigin: "top",
-        paddingLeft:   "3px",
-        paddingRight:  "3px",
+        paddingLeft:     "3px",
+        paddingRight:    "3px",
       }}
       onClick={() => onSelect(entry)}
       className="group z-10"
@@ -310,21 +321,37 @@ function TimeBlock({ entry, index, onSelect, columnOffset = 0, columnWidth = 1 }
         c.light, c.border,
         isRunning && "ring-2 ring-primary/40 shadow-md shadow-primary/15",
       )}>
-        {/* Barra lateral */}
+        {/* Barra lateral colorida */}
         <div className={cn("absolute left-0 inset-y-0 w-1 rounded-l-lg bg-gradient-to-b", c.gradient)} />
 
-        {/* Texto */}
-        <div className={cn("pl-3 pr-2 flex flex-col justify-center h-full overflow-hidden", isShort ? "py-0" : "py-1.5")}>
+        {/* Conteúdo do bloco */}
+        <div className={cn(
+          "pl-3 pr-2 flex flex-col justify-center h-full overflow-hidden",
+          isShort ? "py-0" : "py-1"
+        )}>
+
+          {/* Título — sempre visível se o bloco não for minúsculo */}
           {!isShort && (
-            <p className={cn("font-bold leading-tight truncate", isTall ? "text-xs" : "text-[11px]", c.text)}>
+            <p className={cn("font-bold leading-tight truncate text-[11px]", c.text)}>
               {entry.task_title}
             </p>
           )}
+
+          {/* Nota da sessão ou descrição da tarefa */}
+          {isMedium && shortText && (
+            <p className="text-[10px] text-muted-foreground/80 mt-0.5 leading-tight line-clamp-2">
+              {shortText}
+            </p>
+          )}
+
+          {/* Horário — só em blocos altos */}
           {isTall && (
             <p className="text-[10px] text-muted-foreground/70 font-medium mt-0.5 truncate font-mono">
               {toHHMM(entry.started_at)} → {entry.ended_at ? toHHMM(entry.ended_at) : "…"}
             </p>
           )}
+
+          {/* Duração — só em blocos altos */}
           {isTall && entry.duration_seconds && (
             <p className={cn("text-[10px] font-bold mt-0.5 font-mono", c.text)}>
               {formatSeconds(entry.duration_seconds)}

@@ -16,7 +16,6 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
 
-  // Login: apenas username agora
   const [loginUsername, setLoginUsername] = useState("");
 
   const navigate = useNavigate();
@@ -35,7 +34,6 @@ export default function Login() {
 
     setLoading(true);
     try {
-      // Verifica se username já existe
       const { data: existing } = await supabase
         .from('profiles')
         .select('id')
@@ -47,19 +45,15 @@ export default function Login() {
         return;
       }
 
-      // Cria conta no Supabase Auth
       const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
 
-      // Salva o perfil com username e email
+      // ✅ UPDATE em vez de INSERT — trigger já cria o perfil automaticamente
       if (data.user) {
         const { error: profileError } = await supabase
           .from('profiles')
-          .insert([{
-            id: data.user.id,
-            username: username.toLowerCase().trim(),
-            email: email.toLowerCase().trim(),
-          }]);
+          .update({ username: username.toLowerCase().trim() })
+          .eq('id', data.user.id);
 
         if (profileError) throw profileError;
       }
@@ -87,7 +81,6 @@ export default function Login() {
         return;
       }
 
-      // Busca o e-mail pelo username — sem lógica de detecção
       const emailToUse = await getEmailByUsername(input);
 
       if (!emailToUse) {
@@ -120,7 +113,6 @@ export default function Login() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background relative overflow-hidden">
-      {/* Background decoration */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-primary/8 blur-3xl" />
         <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-primary/6 blur-3xl" />
@@ -133,7 +125,6 @@ export default function Login() {
         transition={{ duration: 0.4, ease: "easeOut" }}
         className="relative z-10 w-full max-w-[400px] px-5"
       >
-        {/* Brand */}
         <div className="text-center mb-8">
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
@@ -151,14 +142,12 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Card */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15, duration: 0.35 }}
           className="rounded-2xl border bg-card shadow-xl shadow-foreground/5 overflow-hidden"
         >
-          {/* Top accent line */}
           <div className="h-1 w-full bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
 
           <div className="px-7 pt-7 pb-8">
@@ -172,7 +161,6 @@ export default function Login() {
             </p>
 
             <AnimatePresence mode="wait">
-              {/* FORMULÁRIO DE CADASTRO */}
               {isRegistering ? (
                 <motion.form
                   key="register"
@@ -183,7 +171,6 @@ export default function Login() {
                   onSubmit={handleRegister}
                   className="space-y-4"
                 >
-                  {/* Username */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-foreground/80">
                       Nome de usuário
@@ -205,7 +192,6 @@ export default function Login() {
                     </p>
                   </div>
 
-                  {/* Email */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-foreground/80">E-mail</label>
                     <div className="relative">
@@ -225,7 +211,6 @@ export default function Login() {
                     </p>
                   </div>
 
-                  {/* Senha */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-foreground/80">Senha</label>
                     <div className="relative">
@@ -266,7 +251,6 @@ export default function Login() {
                 </motion.form>
 
               ) : (
-                /* FORMULÁRIO DE LOGIN — só username + senha */
                 <motion.form
                   key="login"
                   initial={{ opacity: 0, x: -16 }}
@@ -276,7 +260,6 @@ export default function Login() {
                   onSubmit={handleLogin}
                   className="space-y-4"
                 >
-                  {/* Username */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-foreground/80">
                       Nome de usuário
@@ -296,7 +279,6 @@ export default function Login() {
                     </div>
                   </div>
 
-                  {/* Senha */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-foreground/80">Senha</label>
                     <div className="relative">
@@ -338,7 +320,6 @@ export default function Login() {
               )}
             </AnimatePresence>
 
-            {/* Toggle cadastro/login */}
             <div className="mt-5 text-center">
               <button
                 type="button"
