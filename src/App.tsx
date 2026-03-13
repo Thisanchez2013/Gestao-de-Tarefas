@@ -51,7 +51,9 @@ const App = () => (
             element={
               <ProtectedRoute>
                 <SettingsProvider>
-                  <Timeline />
+                  <TaskStoreProvider>
+                    <Timeline />
+                  </TaskStoreProvider>
                 </SettingsProvider>
               </ProtectedRoute>
             }
