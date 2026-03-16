@@ -4,6 +4,13 @@ import { Supplier } from "./supplier";
 export type Priority = "high" | "medium" | "low";
 export type Status = "pending" | "completed";
 
+/**
+ * schedule_type define o modo de agendamento da tarefa:
+ *  - "date"     → apenas data (sem horário definido); aparece como tarefa do dia no calendário
+ *  - "datetime" → data + intervalo de horário; aparece na timeline ocupando o bloco correto
+ */
+export type ScheduleType = "date" | "datetime";
+
 export interface Task {
   id: string;
   user_id: string;
@@ -12,6 +19,12 @@ export interface Task {
   status: Status;
   priority: Priority;
   due_date: string;
+  /** Modo de agendamento: "date" (só data) ou "datetime" (data + intervalo). Default: "date" */
+  schedule_type?: ScheduleType;
+  /** Horário de início no formato "HH:MM" — usado apenas quando schedule_type === "datetime" */
+  scheduled_start?: string | null;
+  /** Horário de fim no formato "HH:MM" — usado apenas quando schedule_type === "datetime" */
+  scheduled_end?: string | null;
   supplier_id?: string;
   estimated_hours?: number;
   tags?: string[];
@@ -31,6 +44,9 @@ export type TaskFormData = Pick<
   | "description"
   | "priority"
   | "due_date"
+  | "schedule_type"
+  | "scheduled_start"
+  | "scheduled_end"
   | "supplier_id"
   | "estimated_hours"
   | "tags"

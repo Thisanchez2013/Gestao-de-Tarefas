@@ -1,22 +1,15 @@
 // src/components/TaskCard.tsx
+import { useState } from "react";
 import type { TaskWithSupplier } from "@/types/task";
 import { Button } from "@/components/ui/button";
 import {
-  CheckCircle2,
-  Circle,
-  Pencil,
-  Trash2,
-  Calendar,
-  AlertCircle,
-  MapPin,
-  Clock,
-  Tag,
-  ChevronRight,
-  Building2,
+  CheckCircle2, Circle, Pencil, Trash2, Calendar,
+  AlertCircle, MapPin, Clock, Tag, ChevronRight, Building2,
 } from "lucide-react";
 import { format, isValid, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 interface Props {
   task: TaskWithSupplier;
@@ -67,94 +60,201 @@ function getTagColor(tag: string): string {
   return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
 }
 
+// Partículas de confetti para conclusão
+function CompletionParticles() {
+  const particles = Array.from({ length: 8 }, (_, i) => ({
+    id: i,
+    angle: (i / 8) * 360,
+    color: ["bg-emerald-400", "bg-emerald-300", "bg-teal-400", "bg-green-300"][i % 4],
+  }));
+
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl">
+      {particles.map((p) => (
+        <motion.div
+          key={p.id}
+          className={`absolute h-1.5 w-1.5 rounded-full ${p.color}`}
+          style={{ left: "20px", top: "50%", transformOrigin: "center" }}
+          initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+          animate={{
+            x: Math.cos((p.angle * Math.PI) / 180) * 40,
+            y: Math.sin((p.angle * Math.PI) / 180) * 30,
+            opacity: 0,
+            scale: 0,
+          }}
+          transition={{ duration: 0.55, ease: "easeOut" }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Flash de conclusão sobre o card
+function CompletionFlash() {
+  return (
+    <motion.div
+      className="absolute inset-0 rounded-2xl bg-emerald-500/15 pointer-events-none"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: [0, 1, 0] }}
+      transition={{ duration: 0.5, times: [0, 0.3, 1] }}
+    />
+  );
+}
+
+// Flash de exclusão
+function DeleteFlash() {
+  return (
+    <motion.div
+      className="absolute inset-0 rounded-2xl bg-rose-500/20 pointer-events-none"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: [0, 1, 0] }}
+      transition={{ duration: 0.35, times: [0, 0.4, 1] }}
+    />
+  );
+}
+
 export function TaskCard({ task, onToggle, onEdit, onDelete, onOpen }: Props) {
   const isCompleted = task.status === "completed";
   const { supplier } = task;
   const config = priorityConfig[task.priority];
 
+  const [showCompletionFx, setShowCompletionFx] = useState(false);
+  const [showDeleteFx, setShowDeleteFx] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+
   const dateObj = new Date(task.due_date);
   const isDateValid = isValid(dateObj);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
   const isOverdue = !isCompleted && isDateValid && dateObj < today;
   const daysUntilDue = isDateValid ? differenceInDays(dateObj, today) : null;
   const isDueSoon = !isCompleted && !isOverdue && daysUntilDue !== null && daysUntilDue <= 2;
-
   const tags = task.tags ?? [];
+
+  function handleToggle(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!isCompleted) {
+      // Concluindo — dispara partículas e flash
+      setShowCompletionFx(true);
+      setTimeout(() => setShowCompletionFx(false), 600);
+    }
+    onToggle(task.id);
+  }
+
+  function handleDeleteClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!deleteConfirm) {
+      // Primeiro clique: pede confirmação
+      setDeleteConfirm(true);
+      setTimeout(() => setDeleteConfirm(false), 2500);
+      return;
+    }
+    // Segundo clique: executa com flash
+    setShowDeleteFx(true);
+    setTimeout(() => {
+      setShowDeleteFx(false);
+      onDelete(task.id);
+    }, 320);
+  }
 
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.96 }}
-      whileHover={{ y: -3, transition: { duration: 0.15 } }}
-      className={`
-        group relative overflow-hidden
-        rounded-2xl border-l-4 border border-border/80 bg-card
-        shadow-sm transition-all duration-200 hover:shadow-lg ${config.glow}
-        ${config.border}
-        ${isCompleted ? "opacity-60" : ""}
-      `}
+      animate={{ opacity: isCompleted ? 0.65 : 1, y: 0 }}
+      exit={{ opacity: 0, x: -30, scale: 0.95, transition: { duration: 0.25 } }}
+      whileHover={{ y: -2, transition: { duration: 0.15 } }}
+      className={cn(
+        "group relative overflow-hidden",
+        "rounded-2xl border-l-4 border border-border/80 bg-card",
+        "shadow-sm transition-all duration-200 hover:shadow-lg",
+        config.glow, config.border,
+      )}
     >
+      {/* Gradiente hover */}
       <div className="absolute inset-0 bg-gradient-to-r from-transparent to-primary/[0.02] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-2xl" />
+
+      {/* Efeitos de feedback */}
+      <AnimatePresence>
+        {showCompletionFx && (
+          <>
+            <CompletionFlash key="flash" />
+            <CompletionParticles key="particles" />
+          </>
+        )}
+        {showDeleteFx && <DeleteFlash key="delete-flash" />}
+      </AnimatePresence>
 
       <button
         onClick={() => onOpen(task)}
         className="w-full text-left px-4 pt-3.5 pb-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-2xl"
       >
         <div className="flex items-start gap-3">
-          {/* Checkbox */}
-          <div
-            onClick={(e) => { e.stopPropagation(); onToggle(task.id); }}
-            className="mt-0.5 shrink-0 cursor-pointer transition-transform active:scale-90"
+          {/* Botão de status com animação */}
+          <motion.div
+            onClick={handleToggle}
+            className="mt-0.5 shrink-0 cursor-pointer"
+            whileTap={{ scale: 0.75 }}
+            whileHover={{ scale: 1.15 }}
+            transition={{ type: "spring", stiffness: 400, damping: 17 }}
           >
             <AnimatePresence mode="wait" initial={false}>
               {isCompleted ? (
-                <motion.div key="checked" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }} transition={{ duration: 0.18, type: "spring", stiffness: 400 }}>
+                <motion.div
+                  key="checked"
+                  initial={{ scale: 0, rotate: -90 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  exit={{ scale: 0, rotate: 90 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 22 }}
+                >
                   <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                 </motion.div>
               ) : (
-                <motion.div key="unchecked" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }} transition={{ duration: 0.18 }}>
+                <motion.div
+                  key="unchecked"
+                  initial={{ scale: 0, rotate: 90 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  exit={{ scale: 0, rotate: -90 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 22 }}
+                >
                   <Circle className="h-5 w-5 text-muted-foreground/25 group-hover:text-primary/40 transition-colors" />
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+          </motion.div>
 
           {/* Conteúdo */}
           <div className="flex-1 min-w-0">
             <div className="flex items-start gap-2 flex-wrap pr-14">
-              <h3 className={`font-semibold text-sm leading-snug transition-all ${isCompleted ? "line-through text-muted-foreground" : "text-foreground"}`}>
+              <motion.h3
+                layout="position"
+                className={cn(
+                  "font-semibold text-sm leading-snug transition-all",
+                  isCompleted ? "line-through text-muted-foreground" : "text-foreground",
+                )}
+              >
                 {task.title}
-              </h3>
+              </motion.h3>
             </div>
 
             {/* Badges */}
             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${config.bgColor} ${config.textColor}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
+              <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide", config.bgColor, config.textColor)}>
+                <span className={cn("h-1.5 w-1.5 rounded-full", config.dot)} />
                 {config.label}
               </span>
-
               {isOverdue && (
                 <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400">
-                  <AlertCircle className="h-3 w-3" />
-                  Atrasada
+                  <AlertCircle className="h-3 w-3" />Atrasada
                 </span>
               )}
-
               {isDueSoon && (
                 <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-orange-50 text-orange-600 dark:bg-orange-950/50 dark:text-orange-400">
-                  <Clock className="h-3 w-3" />
-                  Vence em breve
+                  <Clock className="h-3 w-3" />Vence em breve
                 </span>
               )}
-
               {tags.slice(0, 2).map((tag) => (
-                <span key={tag} className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${getTagColor(tag)}`}>
-                  <Tag className="h-2.5 w-2.5" />
-                  {tag}
+                <span key={tag} className={cn("inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium", getTagColor(tag))}>
+                  <Tag className="h-2.5 w-2.5" />{tag}
                 </span>
               ))}
               {tags.length > 2 && (
@@ -164,7 +264,7 @@ export function TaskCard({ task, onToggle, onEdit, onDelete, onOpen }: Props) {
 
             {/* Descrição */}
             {task.description && (
-              <p className={`text-xs mt-1.5 line-clamp-1 leading-relaxed ${isCompleted ? "text-muted-foreground/50" : "text-muted-foreground"}`}>
+              <p className={cn("text-xs mt-1.5 line-clamp-1 leading-relaxed", isCompleted ? "text-muted-foreground/50" : "text-muted-foreground")}>
                 {task.description}
               </p>
             )}
@@ -176,34 +276,25 @@ export function TaskCard({ task, onToggle, onEdit, onDelete, onOpen }: Props) {
                   <div className="flex h-4 w-4 items-center justify-center rounded bg-primary/10 shrink-0">
                     <Building2 className="h-2.5 w-2.5 text-primary" />
                   </div>
-                  <span className="text-[11px] font-medium text-primary/80 truncate max-w-[120px]">
-                    {supplier.name}
-                  </span>
+                  <span className="text-[11px] font-medium text-primary/80 truncate max-w-[120px]">{supplier.name}</span>
                   {supplier.location_name && (
-                    <span className="text-[11px] text-muted-foreground/60 hidden sm:inline truncate">
-                      · {supplier.location_name}
-                    </span>
+                    <span className="text-[11px] text-muted-foreground/60 hidden sm:inline truncate">· {supplier.location_name}</span>
                   )}
                 </div>
               )}
-
               {supplier && <span className="text-border/60 text-xs select-none">·</span>}
-
               <div className="flex items-center gap-1">
-                <Calendar className={`h-3 w-3 shrink-0 ${isOverdue ? "text-rose-500" : isDueSoon ? "text-orange-500" : "text-muted-foreground/40"}`} />
-                <span className={`text-[11px] font-medium ${isOverdue ? "text-rose-500" : isDueSoon ? "text-orange-500" : "text-muted-foreground/60"}`}>
+                <Calendar className={cn("h-3 w-3 shrink-0", isOverdue ? "text-rose-500" : isDueSoon ? "text-orange-500" : "text-muted-foreground/40")} />
+                <span className={cn("text-[11px] font-medium", isOverdue ? "text-rose-500" : isDueSoon ? "text-orange-500" : "text-muted-foreground/60")}>
                   {isDateValid ? format(dateObj, "dd 'de' MMM", { locale: ptBR }) : "Sem data"}
                 </span>
               </div>
-
               {task.estimated_hours && task.estimated_hours > 0 && (
                 <>
                   <span className="text-border/60 text-xs select-none">·</span>
                   <div className="flex items-center gap-1">
                     <Clock className="h-3 w-3 text-muted-foreground/40" />
-                    <span className="text-[11px] text-muted-foreground/60 font-medium">
-                      {task.estimated_hours}h
-                    </span>
+                    <span className="text-[11px] text-muted-foreground/60 font-medium">{task.estimated_hours}h</span>
                   </div>
                 </>
               )}
@@ -225,15 +316,40 @@ export function TaskCard({ task, onToggle, onEdit, onDelete, onOpen }: Props) {
         >
           <Pencil className="h-3 w-3" />
         </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7 rounded-lg hover:bg-destructive/10 hover:text-destructive transition-colors"
-          onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
-          aria-label="Mover para lixeira"
-        >
-          <Trash2 className="h-3 w-3" />
-        </Button>
+
+        {/* Botão deletar com confirmação */}
+        <AnimatePresence mode="wait">
+          {deleteConfirm ? (
+            <motion.div
+              key="confirm"
+              initial={{ opacity: 0, scale: 0.8, width: 28 }}
+              animate={{ opacity: 1, scale: 1, width: "auto" }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ type: "spring", stiffness: 400, damping: 22 }}
+            >
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 rounded-lg bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 text-[10px] font-bold whitespace-nowrap"
+                onClick={handleDeleteClick}
+              >
+                Confirmar?
+              </Button>
+            </motion.div>
+          ) : (
+            <motion.div key="trash" initial={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 rounded-lg hover:bg-rose-500/10 hover:text-rose-500 transition-colors"
+                onClick={handleDeleteClick}
+                aria-label="Mover para lixeira"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );

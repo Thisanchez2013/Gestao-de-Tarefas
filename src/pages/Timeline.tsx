@@ -5,7 +5,7 @@ import {
   ArrowLeft, ChevronLeft, ChevronRight, CalendarDays, Clock,
   Zap, CheckCircle2, Circle, StickyNote, BarChart3, RefreshCw,
   Timer, Tag, FileText, X, CalendarClock, TrendingUp, Layers, Plus,
-  CalendarCheck,
+  CalendarCheck, AlarmClock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -24,6 +24,8 @@ import {
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { TaskFormDialog } from "@/components/TaskFormDialog";
+import { FeedbackOverlay } from "@/components/FeedbackOverlay";
+import { useActionFeedback } from "@/hooks/useActionFeedback";
 import { useTaskStore } from "@/hooks/useTaskStore";
 import type { TaskFormData } from "@/types/task";
 
@@ -328,9 +330,78 @@ function ScheduledTaskBanner({ task, onCreateTask }: {
   );
 }
 
-// ─── Grade de horas ─────────────────────────────────────────────
-function HourGrid({ entries, showCurrentTime, currentTimePct, onSelect, onClickHour }: {
+// ─── Bloco de tarefa agendada com horário (na grade, tipo datetime) ─
+function ScheduledTimeBlock({ task, index }: {
+  task: ScheduledTask;
+  index: number;
+}) {
+  const c = P[task.task_priority];
+
+  // Converte "HH:MM" para minutos desde H_START
+  function timeToMins(t: string) {
+    const [h, m] = t.split(":").map(Number);
+    return (h - H_START) * 60 + m;
+  }
+
+  const startMins  = timeToMins(task.task_scheduled_start ?? "00:00");
+  const endMins    = timeToMins(task.task_scheduled_end   ?? "01:00");
+  const durationM  = Math.max(endMins - startMins, 15); // mínimo 15 min para visibilidade
+  const topPx      = minutesToPx(startMins);
+  const heightPx   = minutesToPx(durationM);
+  const isShort    = heightPx < 36;
+  const isTall     = heightPx > 60;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scaleY: 0.6, x: -6 }}
+      animate={{ opacity: 1, scaleY: 1,   x: 0  }}
+      transition={{ delay: index * 0.045, duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+      style={{
+        position: "absolute",
+        top: topPx,
+        height: heightPx,
+        left: 0,
+        right: 0,
+        transformOrigin: "top",
+        paddingLeft: "3px",
+        paddingRight: "3px",
+        zIndex: 8,
+      }}
+    >
+      <div className={cn(
+        "relative h-full w-full rounded-lg border overflow-hidden",
+        c.scheduled, c.border,
+        "border-dashed opacity-90",
+      )}>
+        <div className={cn("absolute left-0 inset-y-0 w-1 rounded-l-lg bg-gradient-to-b opacity-60", c.gradient)} />
+        <div className={cn(
+          "absolute inset-0 pl-3 pr-2 flex flex-col overflow-hidden",
+          isShort ? "justify-center" : "justify-center py-1.5"
+        )}>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <AlarmClock className={cn("h-3 w-3 shrink-0 opacity-70", c.scheduledText)} />
+            <p className={cn("font-bold leading-tight text-[11px] truncate flex-1", c.scheduledText)}>
+              {task.task_title}
+            </p>
+            {task.task_status === "completed" && (
+              <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
+            )}
+          </div>
+          {isTall && (
+            <p className={cn("text-[10px] font-mono mt-0.5 opacity-60", c.scheduledText)}>
+              {task.task_scheduled_start} → {task.task_scheduled_end}
+            </p>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+
+function HourGrid({ entries, scheduledDatetime = [], showCurrentTime, currentTimePct, onSelect, onClickHour }: {
   entries: TimelineEntry[];
+  scheduledDatetime?: ScheduledTask[];
   showCurrentTime: boolean;
   currentTimePct: number;
   onSelect: (e: TimelineEntry) => void;
@@ -401,6 +472,11 @@ function HourGrid({ entries, showCurrentTime, currentTimePct, onSelect, onClickH
           </motion.div>
         )}
 
+        {/* Tarefas agendadas com horário específico (datetime) na grade */}
+        {scheduledDatetime.map((task, i) => (
+          <ScheduledTimeBlock key={task.id} task={task} index={i} />
+        ))}
+
         {columns.map((col, colIdx) =>
           col.map((entry, i) => (
             <TimeBlock key={entry.id} entry={entry} index={i + colIdx * 3}
@@ -418,7 +494,7 @@ function WeekView({ date, onSelectEntry, onClickSlot }: {
   onSelectEntry: (e: TimelineEntry) => void;
   onClickSlot: (date: Date, hour: number) => void;
 }) {
-  const { entriesByDay, scheduledByDay, loading } = useWeekTimeline(date);
+  const { entriesByDay, scheduledByDay, scheduledDatetimeByDay, loading } = useWeekTimeline(date);
   const days = eachDayOfInterval({
     start: startOfWeek(date, { weekStartsOn: 0 }),
     end:   endOfWeek(date,   { weekStartsOn: 0 }),
@@ -434,7 +510,7 @@ function WeekView({ date, onSelectEntry, onClickSlot }: {
         <div className="w-16 shrink-0" />
         {days.map((day, i) => {
           const key = format(day, "yyyy-MM-dd");
-          const hasSched = (scheduledByDay[key] || []).length > 0;
+          const hasSched = (scheduledByDay[key] || []).length > 0 || (scheduledDatetimeByDay[key] || []).length > 0;
           return (
             <div key={i} className={cn("flex-1 text-center py-2.5 border-l border-border/20", isToday(day) && "bg-primary/5")}>
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{DAY_NAMES[i]}</p>
@@ -451,11 +527,11 @@ function WeekView({ date, onSelectEntry, onClickSlot }: {
         })}
       </div>
 
-      {/* Faixas de tarefas agendadas por dia (acima da grade) */}
+      {/* Faixas de tarefas do dia (allDay — sem horário) */}
       {days.some(d => (scheduledByDay[format(d, "yyyy-MM-dd")] || []).length > 0) && (
         <div className="flex border-b border-border/30 bg-muted/10">
           <div className="w-16 shrink-0 flex items-center justify-end pr-2">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/50 rotate-[-90deg] whitespace-nowrap">Agend.</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/50 rotate-[-90deg] whitespace-nowrap">Dia</span>
           </div>
           {days.map((day, i) => {
             const key = format(day, "yyyy-MM-dd");
@@ -467,7 +543,7 @@ function WeekView({ date, onSelectEntry, onClickSlot }: {
                   return (
                     <div key={t.id}
                       className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded truncate border", c.scheduled, c.scheduledText)}>
-                      {t.task_title}
+                      📅 {t.task_title}
                     </div>
                   );
                 })}
@@ -494,6 +570,7 @@ function WeekView({ date, onSelectEntry, onClickSlot }: {
           {days.map((day, di) => {
             const key = format(day, "yyyy-MM-dd");
             const dayEntries = entriesByDay[key] || [];
+            const dayDatetime = (scheduledDatetimeByDay[key] || []).filter(t => t.task_scheduled_start);
             const showNow = isToday(day) && currentTimePct >= 0 && currentTimePct <= 100;
             const currentTopPx = (currentTimePct / 100) * TOTAL_HEIGHT;
 
@@ -534,6 +611,11 @@ function WeekView({ date, onSelectEntry, onClickSlot }: {
                   </div>
                 )}
 
+                {/* Tarefas com horário específico na grade semanal */}
+                {!loading && dayDatetime.map((task, i) => (
+                  <ScheduledTimeBlock key={task.id} task={task} index={i} />
+                ))}
+
                 {loading
                   ? <div className="absolute inset-0 bg-muted/10 animate-pulse rounded" />
                   : columns.map((col, colIdx) =>
@@ -558,7 +640,7 @@ function MonthView({ date, onClickDay }: {
   date: Date;
   onClickDay: (day: Date) => void;
 }) {
-  const { entriesByDay, scheduledByDay, loading } = useMonthTimeline(date);
+  const { entriesByDay, scheduledByDay, scheduledDatetimeByDay, loading } = useMonthTimeline(date);
   const calStart = startOfWeek(startOfMonth(date), { weekStartsOn: 0 });
   const calEnd   = endOfWeek(endOfMonth(date),     { weekStartsOn: 0 });
   const allDays  = eachDayOfInterval({ start: calStart, end: calEnd });
@@ -579,13 +661,15 @@ function MonthView({ date, onClickDay }: {
           const isCurrentMonth = isSameMonth(day, date);
           const isCurrentDay   = isToday(day);
           const key            = format(day, "yyyy-MM-dd");
-          const trackedEntries = entriesByDay[key] || [];
-          const scheduledList  = scheduledByDay[key] || [];
+          const trackedEntries    = entriesByDay[key] || [];
+          const scheduledList     = scheduledByDay[key] || [];         // allDay
+          const scheduledDtList   = scheduledDatetimeByDay[key] || []; // com horário
 
-          // Combina rastreadas + agendadas para exibição
+          // Combina: rastreadas + allDay + datetime
           const allItems = [
-            ...trackedEntries.map(e => ({ id: e.id, title: e.task_title, priority: e.task_priority, type: "tracked" as const })),
-            ...scheduledList.map(t => ({ id: t.id, title: t.task_title, priority: t.task_priority, type: "scheduled" as const })),
+            ...trackedEntries.map(e  => ({ id: e.id,  title: e.task_title,  priority: e.task_priority, type: "tracked"   as const, time: null })),
+            ...scheduledList.map(t   => ({ id: t.id,  title: t.task_title,  priority: t.task_priority, type: "allday"    as const, time: null })),
+            ...scheduledDtList.map(t => ({ id: t.id,  title: t.task_title,  priority: t.task_priority, type: "datetime"  as const, time: t.task_scheduled_start ?? null })),
           ];
 
           const totalTrackedSecs = trackedEntries.reduce((acc, e) => acc + (e.duration_seconds ?? 0), 0);
@@ -628,15 +712,15 @@ function MonthView({ date, onClickDay }: {
                 <div className="space-y-0.5">
                   {allItems.slice(0, 3).map((item) => {
                     const c = P[item.priority];
+                    const prefix = item.type === "allday" ? "📅 " : item.type === "datetime" ? `⏰ ` : "";
                     return (
                       <div key={item.id} className={cn(
                         "text-[10px] leading-tight truncate px-1.5 py-0.5 rounded font-medium border",
-                        item.type === "scheduled"
+                        item.type === "allday" || item.type === "datetime"
                           ? cn(c.scheduled, c.scheduledText, "border-dashed")
                           : cn(c.light, c.text, "border-transparent")
                       )}>
-                        {item.type === "scheduled" && "📅 "}
-                        {item.title}
+                        {prefix}{item.type === "datetime" && item.time ? `${item.time} ` : ""}{item.title}
                       </div>
                     );
                   })}
@@ -671,11 +755,12 @@ export default function Timeline() {
   const [currentDate, setCurrentDate]     = useState(new Date());
   const [selectedEntry, setSelectedEntry] = useState<TimelineEntry | null>(null);
 
+  const { feedback, trigger: triggerFeedback, clear: clearFeedback } = useActionFeedback();
   const [createOpen, setCreateOpen]               = useState(false);
   const [prefilledDueDate, setPrefilledDueDate]   = useState<string>("");
 
   const { entries, loading, summary, refetch }     = useTimeline(currentDate);
-  const { scheduled, refetch: refetchScheduled }   = useDayScheduled(currentDate);
+  const { scheduled, allDay, datetime: scheduledDatetime, refetch: refetchScheduled } = useDayScheduled(currentDate);
 
   const now             = new Date();
   const currentTimePct  = timeToPercent(now.toISOString(), H_START, H_END);
@@ -734,6 +819,7 @@ export default function Timeline() {
   async function handleCreateTask(data: TaskFormData) {
     await addTask({ ...data, due_date: prefilledDueDate || data.due_date });
     setCreateOpen(false);
+    triggerFeedback("task-created");
     refetchAll();
   }
 
@@ -756,6 +842,8 @@ export default function Timeline() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
+      {/* Feedback visual de criação */}
+      <FeedbackOverlay type={feedback.type} onDone={clearFeedback} />
 
       {/* ── Header ── */}
       <header className="sticky top-0 z-20 border-b bg-card/80 backdrop-blur-md shrink-0">
@@ -869,16 +957,16 @@ export default function Timeline() {
           {/* ── View: Dia ── */}
           {viewMode === "day" && (
             <div>
-              {/* Faixa de tarefas agendadas */}
-              {scheduled.length > 0 && (
+              {/* Faixa de tarefas do dia (sem horário definido — schedule_type="date") */}
+              {allDay.length > 0 && (
                 <div className="px-4 pt-3 pb-2 border-b border-border/30 space-y-1.5 bg-muted/5">
                   <div className="flex items-center gap-2 mb-2">
                     <CalendarCheck className="h-3.5 w-3.5 text-muted-foreground" />
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Tarefas agendadas para {isToday(currentDate) ? "hoje" : dayLabel(currentDate)}
+                      Tarefas do dia — {isToday(currentDate) ? "hoje" : dayLabel(currentDate)}
                     </span>
                   </div>
-                  {scheduled.map((task) => (
+                  {allDay.map((task) => (
                     <ScheduledTaskBanner key={task.id} task={task} />
                   ))}
                 </div>
@@ -912,7 +1000,8 @@ export default function Timeline() {
                       </Button>
                     </motion.div>
                   ) : (
-                    <HourGrid entries={entries} showCurrentTime={showCurrentTime}
+                    <HourGrid entries={entries} scheduledDatetime={scheduledDatetime}
+                      showCurrentTime={showCurrentTime}
                       currentTimePct={currentTimePct} onSelect={setSelectedEntry}
                       onClickHour={(h) => handleClickHour(h)} />
                   )}

@@ -5,35 +5,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useTaskStore } from "@/hooks/useTaskStore";
 import { useSettings } from "@/hooks/useSettings";
+import { useUserOptions } from "@/hooks/useUserOptions";
+import { ComboInput } from "@/components/ui/ComboInput";
 import { Supplier, SupplierFormData } from "@/types/supplier";
-import { Building2, Phone, MapPin, Mail, StickyNote, Tag } from "lucide-react";
+import { Building2, Phone, MapPin, Mail, StickyNote } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 import { maskPhone } from "@/hooks/useMask";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editSupplier?: Supplier | null;
+  onSuccess?: () => void;
 }
 
-const CATEGORIES = [
-  "Farmácia", "Supermercado", "Materiais de Construção",
-  "Serviços Elétricos", "Serviços Hidráulicos", "Limpeza",
-  "Alimentação", "Tecnologia", "Transporte", "Logística", "Escritório", "Outro",
-];
-
-export function SupplierFormDialog({ open, onOpenChange, editSupplier }: Props) {
+export function SupplierFormDialog({ open, onOpenChange, editSupplier, onSuccess }: Props) {
   const { addSupplier, updateSupplier } = useTaskStore();
   const { isSupplierFieldVisible, isSupplierFieldRequired } = useSettings();
+  const { options: categoryOptions, save: saveCategory, remove: removeCategory } = useUserOptions("category");
 
   const [formData, setFormData] = useState<SupplierFormData>({
     name: "", phone: "", location_name: "", email: "", category: "", notes: "",
@@ -60,33 +52,21 @@ export function SupplierFormDialog({ open, onOpenChange, editSupplier }: Props) 
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
-
     if (!formData.name.trim()) errs.name = "O nome é obrigatório.";
-
-    // Telefone: visível E (obrigatório por settings OU campo locked)
     if (isSupplierFieldVisible("phone")) {
-      if (isSupplierFieldRequired("phone") && !formData.phone.trim()) {
-        errs.phone = "O telefone é obrigatório.";
-      } else if (formData.phone && formData.phone.replace(/\D/g, "").length < 10) {
+      if (formData.phone && formData.phone.replace(/\D/g, "").length < 10)
         errs.phone = "Telefone inválido.";
-      }
     }
-
     if (isSupplierFieldVisible("email") && formData.email) {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))
         errs.email = "E-mail inválido.";
-      }
     }
-    if (isSupplierFieldRequired("location_name") && isSupplierFieldVisible("location_name") && !formData.location_name.trim()) {
+    if (isSupplierFieldRequired("location_name") && isSupplierFieldVisible("location_name") && !formData.location_name.trim())
       errs.location_name = "A localização é obrigatória.";
-    }
-    if (isSupplierFieldRequired("category") && isSupplierFieldVisible("category") && !formData.category) {
+    if (isSupplierFieldRequired("category") && isSupplierFieldVisible("category") && !formData.category)
       errs.category = "A categoria é obrigatória.";
-    }
-    if (isSupplierFieldRequired("notes") && isSupplierFieldVisible("notes") && !formData.notes?.trim()) {
+    if (isSupplierFieldRequired("notes") && isSupplierFieldVisible("notes") && !formData.notes?.trim())
       errs.notes = "As observações são obrigatórias.";
-    }
-
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -110,13 +90,15 @@ export function SupplierFormDialog({ open, onOpenChange, editSupplier }: Props) 
       } else {
         await addSupplier(payload);
       }
+      // Salva a categoria como opção do usuário se for nova
+      if (payload.category) await saveCategory(payload.category);
+      onSuccess?.();
       onOpenChange(false);
     } catch (error) {
       console.error("Erro ao processar fornecedor:", error);
     }
   };
 
-  // Helper label com indicador de obrigatório dinâmico
   function FieldLabel({ fieldKey, icon, children }: {
     fieldKey: keyof ReturnType<typeof useSettings>["settings"]["suppliers"]["fields"];
     icon?: React.ReactNode;
@@ -125,8 +107,7 @@ export function SupplierFormDialog({ open, onOpenChange, editSupplier }: Props) 
     const required = isSupplierFieldRequired(fieldKey as any);
     return (
       <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-        {icon}
-        {children}
+        {icon}{children}
         {required && <span className="text-destructive ml-0.5">*</span>}
       </Label>
     );
@@ -138,9 +119,14 @@ export function SupplierFormDialog({ open, onOpenChange, editSupplier }: Props) 
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
+            <motion.div
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10"
+              initial={{ scale: 0, rotate: -20 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: "spring", stiffness: 350, damping: 18 }}
+            >
               <Building2 className="h-4 w-4 text-primary" />
-            </div>
+            </motion.div>
             <div>
               <DialogTitle className="text-base font-bold">
                 {editSupplier ? "Editar Fornecedor" : "Novo Fornecedor"}
@@ -152,8 +138,13 @@ export function SupplierFormDialog({ open, onOpenChange, editSupplier }: Props) 
           </div>
         </DialogHeader>
 
-        <div className="px-6 py-5 space-y-4 max-h-[65vh] overflow-y-auto">
-          {/* Nome — sempre obrigatório, não configurável */}
+        <motion.div
+          className="px-6 py-5 space-y-4 max-h-[65vh] overflow-y-auto"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, delay: 0.05 }}
+        >
+          {/* Nome */}
           <div className="space-y-1.5">
             <Label htmlFor="s-name" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
               <Building2 className="h-3 w-3" /> Nome <span className="text-destructive">*</span>
@@ -169,35 +160,36 @@ export function SupplierFormDialog({ open, onOpenChange, editSupplier }: Props) 
             {errors.name && <p className="text-xs text-destructive font-medium">{errors.name}</p>}
           </div>
 
-          {/* Categoria */}
+          {/* Categoria — ComboInput com opções salvas pelo usuário */}
           {isSupplierFieldVisible("category") && (
             <div className="space-y-1.5">
-              <FieldLabel fieldKey="category" icon={<Tag className="h-3 w-3" />}>Categoria</FieldLabel>
-              <Select
-                value={formData.category || "none"}
-                onValueChange={(v) => setFormData({ ...formData, category: v === "none" ? "" : v })}
-              >
-                <SelectTrigger className={cn("rounded-xl h-10 text-sm bg-background", errors.category && "border-destructive")}>
-                  <SelectValue placeholder="Selecione uma categoria" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  <SelectItem value="none">
-                    <span className="text-muted-foreground">Sem categoria</span>
-                  </SelectItem>
-                  {CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FieldLabel fieldKey="category" icon={
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                  <line x1="7" y1="7" x2="7.01" y2="7"/>
+                </svg>
+              }>
+                Categoria
+              </FieldLabel>
+              <ComboInput
+                id="s-category"
+                value={formData.category || ""}
+                onChange={(v) => setFormData({ ...formData, category: v })}
+                options={categoryOptions}
+                onSaveOption={saveCategory}
+                onDeleteOption={removeCategory}
+                placeholder="Ex: Farmácia — Enter para salvar"
+                error={!!errors.category}
+              />
               {errors.category && <p className="text-xs text-destructive font-medium">{errors.category}</p>}
             </div>
           )}
 
+          {/* Telefone + Localização */}
           <div className={cn(
             "gap-3",
             isSupplierFieldVisible("phone") && isSupplierFieldVisible("location_name") ? "grid grid-cols-2" : ""
           )}>
-            {/* Telefone */}
             {isSupplierFieldVisible("phone") && (
               <div className="space-y-1.5">
                 <FieldLabel fieldKey="phone" icon={<Phone className="h-3 w-3" />}>Telefone</FieldLabel>
@@ -213,8 +205,6 @@ export function SupplierFormDialog({ open, onOpenChange, editSupplier }: Props) 
                 {errors.phone && <p className="text-xs text-destructive font-medium">{errors.phone}</p>}
               </div>
             )}
-
-            {/* Localização */}
             {isSupplierFieldVisible("location_name") && (
               <div className="space-y-1.5">
                 <FieldLabel fieldKey="location_name" icon={<MapPin className="h-3 w-3" />}>Localização</FieldLabel>
@@ -261,7 +251,7 @@ export function SupplierFormDialog({ open, onOpenChange, editSupplier }: Props) 
               {errors.notes && <p className="text-xs text-destructive font-medium">{errors.notes}</p>}
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-border/60 bg-muted/20 flex items-center justify-between gap-3">

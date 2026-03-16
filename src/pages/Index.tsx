@@ -33,6 +33,8 @@ import {
 } from "lucide-react";
 import type { Task } from "@/types/task";
 import { motion, AnimatePresence } from "framer-motion";
+import { FeedbackOverlay } from "@/components/FeedbackOverlay";
+import { useActionFeedback } from "@/hooks/useActionFeedback";
 
 type Tab = "tasks" | "trash" | "suppliers";
 
@@ -42,6 +44,7 @@ const Index = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { settings } = useSettings();
+  const { feedback, trigger: triggerFeedback, clear: clearFeedback } = useActionFeedback();
 
   const defaultTab = (settings.system.defaultTab as Tab) ?? "tasks";
   const [tab, setTab] = useState<Tab>(defaultTab);
@@ -93,8 +96,35 @@ const Index = () => {
     },
   ];
 
+  // Wrappers com feedback visual
+  async function handleAddTask(data: import("@/types/task").TaskFormData) {
+    await store.addTask(data);
+    triggerFeedback("task-created");
+  }
+
+  async function handleAddSupplier(data: import("@/types/supplier").SupplierFormData) {
+    await store.addSupplier(data);
+    triggerFeedback("supplier-created");
+  }
+
+  function handleToggleWithFeedback(id: string) {
+    const task = store.tasks.find(t => t.id === id) ?? store.trashedTasks.find(t => t.id === id);
+    const willComplete = task?.status === "pending";
+    store.toggleStatus(id);
+    if (willComplete) triggerFeedback("task-completed");
+    else triggerFeedback("task-reopened");
+  }
+
+  function handleDeleteWithFeedback(id: string) {
+    store.softDelete(id);
+    triggerFeedback("task-deleted");
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Feedback visual global */}
+      <FeedbackOverlay type={feedback.type} onDone={clearFeedback} />
+
       {/* Header */}
       <header className="sticky top-0 z-20 border-b bg-card/80 backdrop-blur-md">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4">
@@ -273,8 +303,8 @@ const Index = () => {
                       key={task.id}
                       task={task}
                       onEdit={handleEdit}
-                      onToggle={store.toggleStatus}
-                      onDelete={store.softDelete}
+                      onToggle={handleToggleWithFeedback}
+                      onDelete={handleDeleteWithFeedback}
                       onOpen={handleOpen}
                     />
                   ))}
@@ -330,7 +360,7 @@ const Index = () => {
       <TaskFormDialog
         open={formOpen}
         onOpenChange={setFormOpen}
-        onSubmit={store.addTask}
+        onSubmit={handleAddTask}
         editTask={editTask}
         onUpdate={store.updateTask}
       />
@@ -338,6 +368,7 @@ const Index = () => {
       <SupplierFormDialog
         open={supplierFormOpen}
         onOpenChange={setSupplierFormOpen}
+        onSuccess={() => triggerFeedback("supplier-created")}
       />
 
       <TaskDetailModal
@@ -348,9 +379,9 @@ const Index = () => {
           : null}
         open={detailOpen}
         onOpenChange={setDetailOpen}
-        onToggle={store.toggleStatus}
+        onToggle={handleToggleWithFeedback}
         onEdit={handleEdit}
-        onDelete={store.softDelete}
+        onDelete={handleDeleteWithFeedback}
       />
     </div>
   );

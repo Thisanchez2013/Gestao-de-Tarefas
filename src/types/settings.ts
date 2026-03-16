@@ -76,7 +76,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   suppliers: {
     fields: {
       category:      { key: "category",      label: "Categoria",    visible: true,  required: false, order: 1 },
-      phone:         { key: "phone",         label: "Telefone",     visible: true,  required: true,  order: 2, locked: true },
+      phone:         { key: "phone",         label: "Telefone",     visible: true,  required: false, order: 2 },
       location_name: { key: "location_name", label: "Localização",  visible: true,  required: false, order: 3 },
       email:         { key: "email",         label: "E-mail",       visible: true,  required: false, order: 4 },
       notes:         { key: "notes",         label: "Observações",  visible: true,  required: false, order: 5 },

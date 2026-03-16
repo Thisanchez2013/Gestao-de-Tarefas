@@ -25,6 +25,12 @@ export interface ScheduledTask {
   task_priority: "high" | "medium" | "low";
   task_status: "pending" | "completed";
   task_due_date: string;
+  /** "date" = só data (all-day); "datetime" = intervalo de horário */
+  task_schedule_type: "date" | "datetime";
+  /** Início do intervalo "HH:MM" — presente quando task_schedule_type === "datetime" */
+  task_scheduled_start?: string | null;
+  /** Fim do intervalo "HH:MM" — presente quando task_schedule_type === "datetime" */
+  task_scheduled_end?: string | null;
   task_tags?: string[];
   task_notes?: string;
   task_estimated_hours?: number;
@@ -92,7 +98,7 @@ async function fetchScheduledTasksForRange(from: Date, to: Date): Promise<Schedu
 
   const { data, error } = await supabase
     .from("tasks")
-    .select("id, title, description, priority, status, due_date, tags, notes, estimated_hours, total_tracked_seconds")
+    .select("id, title, description, priority, status, due_date, schedule_type, scheduled_start, scheduled_end, tags, notes, estimated_hours, total_tracked_seconds")
     .eq("user_id", user.id)
     .is("deleted_at", null)
     .gte("due_date", fromStr)
@@ -109,6 +115,9 @@ async function fetchScheduledTasksForRange(from: Date, to: Date): Promise<Schedu
     task_priority: row.priority ?? "medium",
     task_status: row.status ?? "pending",
     task_due_date: row.due_date,
+    task_schedule_type: (row.schedule_type as "date" | "datetime") ?? "date",
+    task_scheduled_start: row.scheduled_start ?? null,
+    task_scheduled_end: row.scheduled_end ?? null,
     task_tags: row.tags,
     task_notes: row.notes,
     task_estimated_hours: row.estimated_hours,
@@ -163,8 +172,9 @@ export function useTimeline(date: Date) {
 
 // ── Hook dia com tarefas agendadas ────────────────────────────────
 export function useDayScheduled(date: Date) {
-  const [scheduled, setScheduled] = useState<ScheduledTask[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [allDay,   setAllDay]   = useState<ScheduledTask[]>([]);
+  const [datetime, setDatetime] = useState<ScheduledTask[]>([]);
+  const [loading, setLoading]   = useState(true);
 
   const dayStart = new Date(date); dayStart.setHours(0, 0, 0, 0);
   const dayEnd   = new Date(date); dayEnd.setHours(23, 59, 59, 999);
@@ -173,9 +183,15 @@ export function useDayScheduled(date: Date) {
     setLoading(true);
     try {
       const tasks = await fetchScheduledTasksForRange(dayStart, dayEnd);
-      setScheduled(tasks);
+      setAllDay(tasks.filter((t) => t.task_schedule_type !== "datetime"));
+      setDatetime(
+        tasks
+          .filter((t) => t.task_schedule_type === "datetime" && t.task_scheduled_start)
+          .sort((a, b) => (a.task_scheduled_start ?? "").localeCompare(b.task_scheduled_start ?? ""))
+      );
     } catch {
-      setScheduled([]);
+      setAllDay([]);
+      setDatetime([]);
     } finally {
       setLoading(false);
     }
@@ -183,13 +199,16 @@ export function useDayScheduled(date: Date) {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  return { scheduled, loading, refetch: fetchData };
+  // Mantém retrocompatibilidade: `scheduled` retorna todos
+  const scheduled = [...allDay, ...datetime];
+  return { scheduled, allDay, datetime, loading, refetch: fetchData };
 }
 
 // ── Hook semana ───────────────────────────────────────────────────
 export function useWeekTimeline(date: Date) {
-  const [entriesByDay, setEntriesByDay]     = useState<Record<string, TimelineEntry[]>>({});
-  const [scheduledByDay, setScheduledByDay] = useState<Record<string, ScheduledTask[]>>({});
+  const [entriesByDay, setEntriesByDay]               = useState<Record<string, TimelineEntry[]>>({});
+  const [scheduledByDay, setScheduledByDay]           = useState<Record<string, ScheduledTask[]>>({});
+  const [scheduledDatetimeByDay, setScheduledDatetimeByDay] = useState<Record<string, ScheduledTask[]>>({});
   const [loading, setLoading] = useState(true);
 
   const weekStart = startOfWeek(date, { weekStartsOn: 0 });
@@ -214,19 +233,28 @@ export function useWeekTimeline(date: Date) {
       }
 
       const sByDay: Record<string, ScheduledTask[]> = {};
+      const sByDayDatetime: Record<string, ScheduledTask[]> = {};
       for (const task of scheduledRaw) {
         const key = task.task_due_date.slice(0, 10);
-        if (!sByDay[key]) sByDay[key] = [];
-        // Não duplica: só adiciona se ainda não há time_entry para essa task nesse dia
         const alreadyTracked = (byDay[key] || []).some((e) => e.task_id === task.task_id);
-        if (!alreadyTracked) sByDay[key].push(task);
+        if (!alreadyTracked) {
+          if (task.task_schedule_type === "datetime" && task.task_scheduled_start) {
+            if (!sByDayDatetime[key]) sByDayDatetime[key] = [];
+            sByDayDatetime[key].push(task);
+          } else {
+            if (!sByDay[key]) sByDay[key] = [];
+            sByDay[key].push(task);
+          }
+        }
       }
 
       setEntriesByDay(byDay);
       setScheduledByDay(sByDay);
+      setScheduledDatetimeByDay(sByDayDatetime);
     } catch {
       setEntriesByDay({});
       setScheduledByDay({});
+      setScheduledDatetimeByDay({});
     } finally {
       setLoading(false);
     }
@@ -234,13 +262,14 @@ export function useWeekTimeline(date: Date) {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  return { entriesByDay, scheduledByDay, loading, refetch: fetchData, weekStart, weekEnd };
+  return { entriesByDay, scheduledByDay, scheduledDatetimeByDay, loading, refetch: fetchData, weekStart, weekEnd };
 }
 
 // ── Hook mês ──────────────────────────────────────────────────────
 export function useMonthTimeline(date: Date) {
-  const [entriesByDay, setEntriesByDay]     = useState<Record<string, TimelineEntry[]>>({});
-  const [scheduledByDay, setScheduledByDay] = useState<Record<string, ScheduledTask[]>>({});
+  const [entriesByDay, setEntriesByDay]               = useState<Record<string, TimelineEntry[]>>({});
+  const [scheduledByDay, setScheduledByDay]           = useState<Record<string, ScheduledTask[]>>({});
+  const [scheduledDatetimeByDay, setScheduledDatetimeByDay] = useState<Record<string, ScheduledTask[]>>({});
   const [loading, setLoading] = useState(true);
 
   const monthStart = startOfMonth(date);
@@ -265,18 +294,28 @@ export function useMonthTimeline(date: Date) {
       }
 
       const sByDay: Record<string, ScheduledTask[]> = {};
+      const sByDayDatetime: Record<string, ScheduledTask[]> = {};
       for (const task of scheduledRaw) {
         const key = task.task_due_date.slice(0, 10);
-        if (!sByDay[key]) sByDay[key] = [];
         const alreadyTracked = (byDay[key] || []).some((e) => e.task_id === task.task_id);
-        if (!alreadyTracked) sByDay[key].push(task);
+        if (!alreadyTracked) {
+          if (task.task_schedule_type === "datetime" && task.task_scheduled_start) {
+            if (!sByDayDatetime[key]) sByDayDatetime[key] = [];
+            sByDayDatetime[key].push(task);
+          } else {
+            if (!sByDay[key]) sByDay[key] = [];
+            sByDay[key].push(task);
+          }
+        }
       }
 
       setEntriesByDay(byDay);
       setScheduledByDay(sByDay);
+      setScheduledDatetimeByDay(sByDayDatetime);
     } catch {
       setEntriesByDay({});
       setScheduledByDay({});
+      setScheduledDatetimeByDay({});
     } finally {
       setLoading(false);
     }
@@ -284,7 +323,7 @@ export function useMonthTimeline(date: Date) {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  return { entriesByDay, scheduledByDay, loading, refetch: fetchData, monthStart, monthEnd };
+  return { entriesByDay, scheduledByDay, scheduledDatetimeByDay, loading, refetch: fetchData, monthStart, monthEnd };
 }
 
 // ── Utilitários ───────────────────────────────────────────────────
