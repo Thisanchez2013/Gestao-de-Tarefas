@@ -1,73 +1,133 @@
-# Welcome to your Lovable project
+Aqui está um README profissional, já adaptado ao seu sistema (Gestão de Tarefas), substituindo o genérico do Lovable 👇
 
-## Project info
+---
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+# 🚀 Sistema de Gestão de Tarefas
 
-## How can I edit this code?
+Sistema web completo para gerenciamento de tarefas, produtividade e organização, desenvolvido com foco em flexibilidade, personalização e experiência do usuário.
 
-There are several ways of editing your application.
+---
 
-**Use Lovable**
+## 📌 Sobre o projeto
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+Este sistema foi desenvolvido para permitir o controle eficiente de tarefas, com recursos como:
 
-Changes made via Lovable will be committed automatically to this repo.
+* Criação e gerenciamento de tarefas
+* Cronômetro de atividades
+* Visualização em calendário
+* Controle de status (pendente, em andamento, concluído)
+* Interface moderna e interativa
+* Alta possibilidade de personalização via Settings
 
-**Use your preferred IDE**
+O objetivo é oferecer uma ferramenta completa de produtividade, adaptável a diferentes tipos de usuários e fluxos de trabalho.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## 🛠️ Tecnologias utilizadas
 
-Follow these steps:
+* React
+* TypeScript / JavaScript
+* Tailwind CSS
+* Supabase (backend, autenticação e banco de dados)
+* Lovable (geração e estrutura inicial do projeto)
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+---
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## ⚙️ Funcionalidades principais
 
-# Step 3: Install the necessary dependencies.
-npm i
+### 📋 Gestão de tarefas
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+* Criar, editar e excluir tarefas
+* Definir prioridades
+* Marcar como concluída ou pendente
+* Controle de datas e prazos
+
+### ⏱️ Cronômetro
+
+* Registro de tempo por tarefa
+* Histórico de execuções
+* Controle de produtividade
+
+### 📅 Calendário
+
+* Visualização por dia
+* (Em evolução) semana e mês
+* Planejamento de tarefas futuras
+
+### ⚙️ Configurações (Settings)
+
+* Personalização do sistema
+* Ativação/desativação de funcionalidades
+* Controle de campos obrigatórios
+* Configuração de comportamento dos formulários
+* Alteração de senha
+
+---
+
+## 🎯 Objetivo do sistema
+
+Transformar o sistema em uma plataforma totalmente configurável, onde o usuário possa:
+
+* Adaptar o sistema ao seu fluxo de trabalho
+* Controlar funcionalidades ativas
+* Personalizar a experiência sem necessidade de código
+
+---
+
+## 🖥️ Como rodar o projeto
+
+### Pré-requisitos
+
+* Node.js instalado
+* npm ou yarn
+
+### Passos
+
+```bash
+# Clone o repositório
+git clone <URL_DO_REPOSITORIO>
+
+# Acesse a pasta
+cd Gestao-de-Tarefas
+
+# Instale as dependências
+npm install
+
+# Rode o projeto
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+---
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 📦 Estrutura do projeto (resumo)
 
-**Use GitHub Codespaces**
+```
+src/
+ ├── components/     # Componentes reutilizáveis
+ ├── pages/          # Telas do sistema
+ ├── services/       # Integrações (Supabase, etc.)
+ ├── hooks/          # Hooks personalizados
+ ├── styles/         # Estilização
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+---
 
-## What technologies are used for this project?
+## 🚧 Roadmap (Melhorias futuras)
 
-This project is built with:
+* Visualização completa do calendário (Week / Month)
+* Dashboard com métricas de produtividade
+* Sistema avançado de permissões
+* Automação de tarefas
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+---
 
-## How can I deploy this project?
+## 👨‍💻 Autor
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+Thiago Sanchez Nascimento
+Estudante de ADS | Consultor ERP Sankhya | Desenvolvedor
 
-## Can I connect a custom domain to my Lovable project?
+---
 
-Yes, you can!
+## 💡 Observações
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Este projeto está em evolução contínua, com foco em aprendizado, melhoria de arquitetura e criação de uma solução escalável.
