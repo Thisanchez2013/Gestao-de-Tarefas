@@ -1,7 +1,3 @@
-Aqui está um README profissional, já adaptado ao seu sistema (Gestão de Tarefas), substituindo o genérico do Lovable 👇
-
----
-
 # 🚀 Sistema de Gestão de Tarefas
 
 Sistema web completo para gerenciamento de tarefas, produtividade e organização, desenvolvido com foco em flexibilidade, personalização e experiência do usuário.
