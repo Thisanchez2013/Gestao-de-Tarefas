@@ -58,10 +58,7 @@ function useTaskStoreLogic() {
     const channel = supabase
       .channel("db-updates")
       .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => fetchData())
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "suppliers" }, () =>
-        fetchData()
-      )
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "suppliers" }, () =>
+      .on("postgres_changes", { event: "*", schema: "public", table: "suppliers" }, () =>
         fetchData()
       )
       .subscribe();

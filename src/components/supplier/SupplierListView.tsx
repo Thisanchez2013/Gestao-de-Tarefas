@@ -1,6 +1,7 @@
 // src/components/supplier/SupplierListView.tsx
 import { useState } from "react";
 import { useTaskStore } from "@/hooks/useTaskStore";
+import { useSettings } from "@/hooks/useSettings";
 import { Button } from "@/components/ui/button";
 import { Trash2, Pencil, MapPin, Phone, MessageSquare, Building2, Plus, Mail, Tag, StickyNote, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -55,7 +56,10 @@ function EmptySuppliers({ onNew }: { onNew: () => void }) {
   );
 }
 
-function SupplierCard({ s, onEdit, onDelete }: { s: Supplier; onEdit: () => void; onDelete: () => void }) {
+function SupplierCard({ s, onEdit, onDelete, pendingDelete, onConfirmDelete, onCancelDelete }: {
+  s: Supplier; onEdit: () => void; onDelete: () => void;
+  pendingDelete?: boolean; onConfirmDelete?: () => void; onCancelDelete?: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const catColor = getCategoryColor(s.category);
   const initials = getInitials(s.name);
@@ -106,9 +110,20 @@ function SupplierCard({ s, onEdit, onDelete }: { s: Supplier; onEdit: () => void
                 <Button size="icon" variant="ghost" className="h-7 w-7 rounded-lg hover:bg-primary/10 hover:text-primary" onClick={onEdit}>
                   <Pencil className="h-3 w-3" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7 rounded-lg hover:bg-destructive/10 hover:text-destructive" onClick={onDelete}>
-                  <Trash2 className="h-3 w-3" />
-                </Button>
+                <AnimatePresence mode="wait">
+                  {pendingDelete ? (
+                    <motion.div key="confirm" initial={{ opacity: 0, width: 28 }} animate={{ opacity: 1, width: "auto" }} exit={{ opacity: 0 }} className="flex items-center gap-0.5">
+                      <button onClick={onConfirmDelete} className="text-[10px] font-bold text-rose-600 hover:text-rose-700 px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 transition-colors">Sim</button>
+                      <button onClick={onCancelDelete} className="text-[10px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded hover:bg-muted transition-colors">Não</button>
+                    </motion.div>
+                  ) : (
+                    <motion.div key="trash" initial={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 rounded-lg hover:bg-destructive/10 hover:text-destructive" onClick={onDelete}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           </div>
@@ -170,14 +185,27 @@ function SupplierCard({ s, onEdit, onDelete }: { s: Supplier; onEdit: () => void
 export function SupplierListView() {
   const { suppliers } = useTaskStore();
   const { toast } = useToast();
+  const { settings } = useSettings();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const handleEdit = (supplier: Supplier) => { setSelectedSupplier(supplier); setIsModalOpen(true); };
   const handleNew = () => { setSelectedSupplier(null); setIsModalOpen(true); };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Tem certeza que deseja excluir este fornecedor?")) return;
+    // Se confirmação desativada, exclui direto
+    if (!settings.system.confirmBeforeDelete) {
+      await doDelete(id);
+      return;
+    }
+    // Se confirmação ativada, marca como pendente (card mostrará botão de confirmar)
+    setPendingDeleteId(id);
+    setTimeout(() => setPendingDeleteId(null), 3000);
+  };
+
+  const doDelete = async (id: string) => {
+    setPendingDeleteId(null);
     const { error } = await supabase.from("suppliers").delete().eq("id", id);
     if (error) {
       toast({ variant: "destructive", title: "Erro ao excluir", description: "Verifique se não há tarefas vinculadas a ele." });
@@ -217,6 +245,9 @@ export function SupplierListView() {
             s={s}
             onEdit={() => handleEdit(s)}
             onDelete={() => handleDelete(s.id)}
+            pendingDelete={pendingDeleteId === s.id}
+            onConfirmDelete={() => doDelete(s.id)}
+            onCancelDelete={() => setPendingDeleteId(null)}
           />
         ))}
       </div>

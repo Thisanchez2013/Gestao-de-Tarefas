@@ -3,14 +3,65 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Task, TimeEntry } from "@/types/task";
 import { useToast } from "@/hooks/use-toast";
+import { useSettings } from "@/hooks/useSettings";
 
 interface UseTimerOptions {
   task: Task;
   onUpdate: (id: string, data: Partial<Task>) => void;
 }
 
+// ─── Helpers de formatação (exportados) ──────────────────────
+export function formatClock(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
+}
+
+export function formatSeconds(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h${String(m).padStart(2, "0")}m`;
+  if (m > 0) return `${m}m${String(s).padStart(2, "0")}s`;
+  return `${s}s`;
+}
+
+export function formatSecondsLong(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  const parts: string[] = [];
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}min`);
+  if (s > 0 && h === 0) parts.push(`${s}s`);
+  return parts.length > 0 ? parts.join(" ") : "0s";
+}
+
+// ─── Sons do cronômetro ───────────────────────────────────────
+function playBeep(type: "start" | "stop") {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = type === "start" ? 880 : 440;
+    osc.type = "sine";
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.3);
+  } catch {
+    // ignora se AudioContext não disponível
+  }
+}
+
+// ════════════════════════════════════════════════════════════
 export function useTimer({ task, onUpdate }: UseTimerOptions) {
   const { toast } = useToast();
+  const { settings } = useSettings();
+
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
 
@@ -26,6 +77,9 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
   const [elapsed, setElapsed] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Alerta de sessão longa
+  const longAlertFiredRef = useRef(false);
+
   const prevTaskIdRef = useRef(task.id);
   useEffect(() => {
     if (prevTaskIdRef.current !== task.id) {
@@ -33,6 +87,7 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
       setLocalRunning(!!task.timer_running && !!task.timer_started_at);
       setLocalStartedAt(task.timer_started_at ?? null);
       setLocalTotal(task.total_tracked_seconds ?? 0);
+      longAlertFiredRef.current = false;
     }
   }, [task.id, task.timer_running, task.timer_started_at, task.total_tracked_seconds]);
 
@@ -47,186 +102,224 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
     }
   }, [localRunning, localStartedAt]);
 
+  // Tick do cronômetro + alerta de sessão longa
   useEffect(() => {
     if (localRunning) {
       intervalRef.current = setInterval(() => {
-        setElapsed((prev) => prev + 1);
+        setElapsed((prev) => {
+          const next = prev + 1;
+
+          // Verificar alerta de sessão longa
+          if (
+            settings.timer.alertOnLongSession &&
+            !longAlertFiredRef.current
+          ) {
+            const threshold = settings.timer.longSessionThresholdMinutes * 60;
+            if (next >= threshold) {
+              longAlertFiredRef.current = true;
+              toast({
+                title: "⏰ Sessão longa",
+                description: `Você está trabalhando há ${settings.timer.longSessionThresholdMinutes} minutos nesta tarefa.`,
+              });
+            }
+          }
+
+          return next;
+        });
       }, 1000);
     } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [localRunning]);
+  }, [localRunning, settings.timer.alertOnLongSession, settings.timer.longSessionThresholdMinutes, toast]);
 
-  const fetchEntries = useCallback(async () => {
-    setLoadingEntries(true);
+  // Carregar entradas de tempo (modo sessão)
+  const loadEntries = useCallback(async () => {
+    if (settings.system.task_time_mode !== "session_based") return;
     try {
-      const { data, error } = await supabase
+      setLoadingEntries(true);
+      const { data } = await supabase
         .from("time_entries")
         .select("*")
         .eq("task_id", task.id)
         .order("started_at", { ascending: false });
-      if (error) throw error;
-      setTimeEntries(data || []);
+      if (data) setTimeEntries(data as TimeEntry[]);
     } catch {
-      // silencia — tabela pode não existir ainda
+      // silencia
     } finally {
       setLoadingEntries(false);
     }
-  }, [task.id]);
+  }, [task.id, settings.system.task_time_mode]);
 
   useEffect(() => {
-    fetchEntries();
-  }, [fetchEntries]);
+    loadEntries();
+  }, [loadEntries]);
 
-  // ─── INICIA ───────────────────────────────────────────────
+  // ── START ──────────────────────────────────────────────────
   const start = useCallback(async () => {
+    if (localRunning) return;
     const startedAt = new Date().toISOString();
+    longAlertFiredRef.current = false;
+
+    // Som de início
+    if (settings.timer.soundEnabled) playBeep("start");
+
     setLocalRunning(true);
     setLocalStartedAt(startedAt);
-    setElapsed(0);
-    onUpdate(task.id, { timer_running: true, timer_started_at: startedAt });
 
-    const { error } = await supabase
-      .from("tasks")
-      .update({ timer_running: true, timer_started_at: startedAt, updated_at: new Date().toISOString() })
-      .eq("id", task.id);
+    const patch: Partial<Task> = {
+      timer_running: true,
+      timer_started_at: startedAt,
+    };
 
-    if (error) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      await supabase
+        .from("tasks")
+        .update(patch)
+        .eq("id", task.id)
+        .eq("user_id", user.id);
+      onUpdate(task.id, patch);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Erro ao iniciar timer", description: err.message });
       setLocalRunning(false);
       setLocalStartedAt(null);
-      setElapsed(0);
-      onUpdate(task.id, { timer_running: false, timer_started_at: null });
-      toast({ variant: "destructive", title: "Erro ao iniciar timer", description: error.message });
     }
-  }, [task.id, onUpdate, toast]);
+  }, [localRunning, task.id, onUpdate, toast, settings.timer.soundEnabled]);
 
-  // ─── PARA ─────────────────────────────────────────────────
+  // ── STOP ───────────────────────────────────────────────────
   const stop = useCallback(async (note?: string) => {
-    if (!localStartedAt) return;
+    if (!localRunning || !localStartedAt) return;
+
     const endedAt = new Date().toISOString();
-    const sessionSeconds = Math.floor(
-      (new Date(endedAt).getTime() - new Date(localStartedAt).getTime()) / 1000
-    );
-    const newTotal = localTotal + sessionSeconds;
+    const startMs = new Date(localStartedAt).getTime();
+    const duration = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+    const newTotal = localTotal + duration;
+
+    // Som de parada
+    if (settings.timer.soundEnabled) playBeep("stop");
 
     setLocalRunning(false);
     setLocalStartedAt(null);
     setLocalTotal(newTotal);
-    setElapsed(0);
-    onUpdate(task.id, { timer_running: false, timer_started_at: null, total_tracked_seconds: newTotal });
 
-    const { data: { user } } = await supabase.auth.getUser();
-    const entry = {
-      task_id: task.id,
-      user_id: user?.id ?? "",
-      started_at: localStartedAt,
-      ended_at: endedAt,
-      duration_seconds: sessionSeconds,
-      note: note?.trim() || null,
+    const patch: Partial<Task> = {
+      timer_running: false,
+      timer_started_at: null,
+      total_tracked_seconds: newTotal,
     };
 
-    const [taskRes, entryRes] = await Promise.all([
-      supabase.from("tasks").update({
-        timer_running: false,
-        timer_started_at: null,
-        total_tracked_seconds: newTotal,
-        updated_at: new Date().toISOString(),
-      }).eq("id", task.id),
-      supabase.from("time_entries").insert([entry]).select().single(),
-    ]);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
 
-    if (taskRes.error) {
-      toast({ variant: "destructive", title: "Erro ao salvar timer", description: taskRes.error.message });
-    }
-    if (entryRes.data) {
-      setTimeEntries((prev) => [entryRes.data, ...prev]);
-    }
-  }, [localStartedAt, localTotal, task.id, onUpdate, toast]);
+      await supabase
+        .from("tasks")
+        .update(patch)
+        .eq("id", task.id)
+        .eq("user_id", user.id);
 
-  // ─── DESCARTA ─────────────────────────────────────────────
+      if (settings.system.task_time_mode === "session_based") {
+        const entry = {
+          task_id: task.id,
+          user_id: user.id,
+          started_at: localStartedAt,
+          ended_at: endedAt,
+          duration_seconds: duration,
+          note: note ?? null,
+        };
+        const { data: newEntry } = await supabase
+          .from("time_entries")
+          .insert(entry)
+          .select()
+          .single();
+        if (newEntry) {
+          setTimeEntries((prev) => [newEntry as TimeEntry, ...prev]);
+        }
+      }
+
+      onUpdate(task.id, patch);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Erro ao parar timer", description: err.message });
+    }
+  }, [localRunning, localStartedAt, localTotal, task.id, onUpdate, toast, settings.system.task_time_mode, settings.timer.soundEnabled]);
+
+  // ── DISCARD ────────────────────────────────────────────────
   const discard = useCallback(async () => {
     setLocalRunning(false);
     setLocalStartedAt(null);
-    setElapsed(0);
-    onUpdate(task.id, { timer_running: false, timer_started_at: null });
-    await supabase.from("tasks").update({
+    const patch: Partial<Task> = {
       timer_running: false,
       timer_started_at: null,
-      updated_at: new Date().toISOString(),
-    }).eq("id", task.id);
+    };
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase.from("tasks").update(patch).eq("id", task.id).eq("user_id", user.id);
+      onUpdate(task.id, patch);
+    } catch { }
   }, [task.id, onUpdate]);
 
-  // ─── DELETA ENTRADA ───────────────────────────────────────
+  // ── DELETE ENTRY ───────────────────────────────────────────
   const deleteEntry = useCallback(async (entryId: string, duration: number) => {
-    const newTotal = Math.max(0, localTotal - duration);
     setTimeEntries((prev) => prev.filter((e) => e.id !== entryId));
+    const newTotal = Math.max(0, localTotal - duration);
     setLocalTotal(newTotal);
-    onUpdate(task.id, { total_tracked_seconds: newTotal });
+    const patch: Partial<Task> = { total_tracked_seconds: newTotal };
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase.from("time_entries").delete().eq("id", entryId).eq("user_id", user.id);
+      await supabase.from("tasks").update(patch).eq("id", task.id).eq("user_id", user.id);
+      onUpdate(task.id, patch);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Erro ao remover sessão", description: err.message });
+    }
+  }, [task.id, localTotal, onUpdate, toast]);
 
-    await Promise.all([
-      supabase.from("time_entries").delete().eq("id", entryId),
-      supabase.from("tasks").update({
-        total_tracked_seconds: newTotal,
-        updated_at: new Date().toISOString(),
-      }).eq("id", task.id),
-    ]);
-    toast({ title: "Sessão removida" });
-  }, [localTotal, task.id, onUpdate, toast]);
-
-  // ─── EDITA ENTRADA ────────────────────────────────────────
+  // ── EDIT ENTRY ─────────────────────────────────────────────
   const editEntry = useCallback(async (
     entryId: string,
     oldDuration: number,
-    patch: { started_at?: string; ended_at?: string; note?: string }
+    patch: { started_at: string; ended_at: string; note: string }
   ) => {
-    // Recalcula duration a partir dos novos horários
-    const entry = timeEntries.find((e) => e.id === entryId);
-    if (!entry) return;
-
-    const newStarted = patch.started_at ?? entry.started_at;
-    const newEnded   = patch.ended_at   ?? entry.ended_at ?? new Date().toISOString();
     const newDuration = Math.max(
       0,
-      Math.floor((new Date(newEnded).getTime() - new Date(newStarted).getTime()) / 1000)
+      Math.floor((new Date(patch.ended_at).getTime() - new Date(patch.started_at).getTime()) / 1000)
     );
+    const totalDelta = newDuration - oldDuration;
+    const newTotal   = Math.max(0, localTotal + totalDelta);
 
-    const diff = newDuration - oldDuration;
-    const newTotal = Math.max(0, localTotal + diff);
-
-    // Atualiza estado local imediatamente
     setTimeEntries((prev) =>
       prev.map((e) =>
         e.id === entryId
-          ? { ...e, started_at: newStarted, ended_at: newEnded, duration_seconds: newDuration, note: patch.note ?? e.note }
+          ? { ...e, ...patch, duration_seconds: newDuration }
           : e
       )
     );
     setLocalTotal(newTotal);
-    onUpdate(task.id, { total_tracked_seconds: newTotal });
 
-    const [entryRes, taskRes] = await Promise.all([
-      supabase.from("time_entries").update({
-        started_at: newStarted,
-        ended_at: newEnded,
-        duration_seconds: newDuration,
-        note: patch.note !== undefined ? (patch.note.trim() || null) : entry.note,
-      }).eq("id", entryId),
-      supabase.from("tasks").update({
-        total_tracked_seconds: newTotal,
-        updated_at: new Date().toISOString(),
-      }).eq("id", task.id),
-    ]);
-
-    if (entryRes.error) {
-      toast({ variant: "destructive", title: "Erro ao editar sessão", description: entryRes.error.message });
-      fetchEntries(); // recarrega estado real do banco
-    } else {
-      toast({ title: "Sessão atualizada" });
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase
+        .from("time_entries")
+        .update({ ...patch, duration_seconds: newDuration })
+        .eq("id", entryId)
+        .eq("user_id", user.id);
+      const taskPatch: Partial<Task> = { total_tracked_seconds: newTotal };
+      await supabase.from("tasks").update(taskPatch).eq("id", task.id).eq("user_id", user.id);
+      onUpdate(task.id, taskPatch);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Erro ao editar sessão", description: err.message });
     }
-  }, [timeEntries, localTotal, task.id, onUpdate, toast, fetchEntries]);
+  }, [task.id, localTotal, onUpdate, toast]);
 
   return {
     isRunning: localRunning,
@@ -239,36 +332,5 @@ export function useTimer({ task, onUpdate }: UseTimerOptions) {
     discard,
     deleteEntry,
     editEntry,
-    refetchEntries: fetchEntries,
   };
-}
-
-// ─── FORMATADORES ─────────────────────────────────────────────
-export function formatSeconds(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
-  if (m > 0) return `${m}m ${String(s).padStart(2, "0")}s`;
-  return `${s}s`;
-}
-
-export function formatSecondsLong(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  return [
-    h > 0 ? `${h}h` : null,
-    m > 0 ? `${String(m).padStart(h > 0 ? 2 : 1, "0")}m` : h > 0 ? "00m" : null,
-    `${String(s).padStart(2, "0")}s`,
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
-export function formatClock(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }

@@ -1,4 +1,5 @@
 // src/components/TrashView.tsx
+import { useState } from "react";
 import type { Task } from "@/types/task";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,9 +11,10 @@ import {
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
-import { format, isValid, formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { isValid, formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { useSettings } from "@/hooks/useSettings";
+import { useDateFormat } from "@/hooks/useDateFormat";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Props {
@@ -61,6 +63,25 @@ function getTagColor(tag: string): string {
 
 export function TrashView({ tasks, onRestore, onPermanentDelete }: Props) {
   const { toast } = useToast();
+  const { settings } = useSettings();
+  const { formatDate, locale } = useDateFormat();
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  const handlePermanentDelete = (id: string) => {
+    if (!settings.system.confirmBeforeDelete) {
+      onPermanentDelete(id);
+      toast({ title: "🗑️ Tarefa excluída permanentemente." });
+      return;
+    }
+    setPendingDeleteId(id);
+    setTimeout(() => setPendingDeleteId(null), 3000);
+  };
+
+  const confirmDelete = (id: string) => {
+    setPendingDeleteId(null);
+    onPermanentDelete(id);
+    toast({ title: "🗑️ Tarefa excluída permanentemente." });
+  };
 
   if (tasks.length === 0) {
     return (
@@ -130,7 +151,7 @@ export function TrashView({ tasks, onRestore, onPermanentDelete }: Props) {
               <div className="absolute top-0 right-0 px-2.5 py-1 bg-destructive/8 border-b border-l border-border/50 rounded-bl-xl">
                 <p className="text-[10px] font-semibold text-destructive/70 uppercase tracking-wider">
                   Excluída {deletedAt && isValid(deletedAt)
-                    ? formatDistanceToNow(deletedAt, { locale: ptBR, addSuffix: true })
+                    ? formatDistanceToNow(deletedAt, { locale, addSuffix: true })
                     : ""}
                 </p>
               </div>
@@ -171,7 +192,7 @@ export function TrashView({ tasks, onRestore, onPermanentDelete }: Props) {
                     <div className="flex items-center gap-1">
                       <Calendar className="h-3 w-3 text-muted-foreground/40" />
                       <span className="text-[11px] text-muted-foreground/50 font-medium">
-                        {format(dueDate, "dd 'de' MMM", { locale: ptBR })}
+                        {formatDate(dueDate)}
                       </span>
                     </div>
                   )}
@@ -208,7 +229,7 @@ export function TrashView({ tasks, onRestore, onPermanentDelete }: Props) {
               {/* Footer com ações */}
               <div className="px-4 py-2.5 border-t border-border/40 bg-muted/20 flex items-center justify-between">
                 <p className="text-[10px] text-muted-foreground/50 font-mono">
-                  Criada em {format(new Date(task.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                  Criada em {formatDate(new Date(task.created_at))}
                 </p>
                 <div className="flex gap-1.5">
                   <Button
@@ -227,13 +248,23 @@ export function TrashView({ tasks, onRestore, onPermanentDelete }: Props) {
                     size="sm"
                     variant="ghost"
                     className="h-7 text-xs gap-1.5 hover:bg-destructive/10 hover:text-destructive transition-colors"
-                    onClick={() => {
-                      onPermanentDelete(task.id);
-                      toast({ title: "🗑️ Tarefa excluída permanentemente." });
-                    }}
+                    onClick={() => handlePermanentDelete(task.id)}
                   >
-                    <Trash2 className="h-3 w-3" />
-                    Excluir
+                    {pendingDeleteId === task.id ? (
+                      <span className="flex items-center gap-1">
+                        <span className="text-rose-600 font-bold">Confirmar?</span>
+                        <button
+                          className="ml-1 text-rose-600 underline text-[10px]"
+                          onClick={(e) => { e.stopPropagation(); confirmDelete(task.id); }}
+                        >Sim</button>
+                        <button
+                          className="text-muted-foreground text-[10px]"
+                          onClick={(e) => { e.stopPropagation(); setPendingDeleteId(null); }}
+                        >Não</button>
+                      </span>
+                    ) : (
+                      <><Trash2 className="h-3 w-3" />Excluir</>
+                    )}
                   </Button>
                 </div>
               </div>

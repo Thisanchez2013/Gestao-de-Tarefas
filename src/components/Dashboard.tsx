@@ -2,6 +2,7 @@
 import { CheckCircle2, Clock, TrendingUp, ListTodo } from "lucide-react";
 import { motion } from "framer-motion";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import type { TooltipProps } from "recharts";
 
 interface Props {
   pendingCount: number;
@@ -51,12 +52,13 @@ function StatCard({ icon, label, value, colorClass, iconBg, delay = 0 }: StatCar
   );
 }
 
-const CustomTooltip = ({ active, payload }: any) => {
+const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
   if (active && payload && payload.length) {
+    const item = payload[0];
     return (
       <div className="rounded-xl border bg-card px-3 py-2 shadow-lg text-sm font-medium">
-        <span style={{ color: payload[0].payload.color }}>{payload[0].name}</span>
-        <span className="text-foreground ml-2 font-bold">{payload[0].value}</span>
+        <span style={{ color: (item.payload as { color: string }).color }}>{item.name}</span>
+        <span className="text-foreground ml-2 font-bold">{item.value}</span>
       </div>
     );
   }

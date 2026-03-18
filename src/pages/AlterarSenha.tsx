@@ -5,8 +5,9 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, KeyRound, ArrowLeft, CheckSquare } from "lucide-react";
+import { Eye, EyeOff, KeyRound, ArrowLeft, CheckSquare, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
+import { useSettings } from "@/hooks/useSettings";
 
 export default function AlterarSenha() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -19,12 +20,49 @@ export default function AlterarSenha() {
 
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { settings } = useSettings();
+
+  const minLen = settings.security.minPasswordLength;
+  const requireStrong = settings.security.requireStrongPassword;
+  const requireCurrentPassword = settings.security.requirePasswordConfirmation;
+
+  // Valida força da senha se requireStrongPassword estiver ativo
+  function isStrongPassword(pwd: string): boolean {
+    return /[A-Z]/.test(pwd) && /[0-9]/.test(pwd) && /[^A-Za-z0-9]/.test(pwd);
+  }
+
+  // Calcula força visualmente
+  function getPasswordStrength(pwd: string): { score: number; label: string; color: string } {
+    if (!pwd) return { score: 0, label: "", color: "" };
+    let score = 0;
+    if (pwd.length >= minLen) score++;
+    if (pwd.length >= minLen + 4) score++;
+    if (/[A-Z]/.test(pwd)) score++;
+    if (/[0-9]/.test(pwd)) score++;
+    if (/[^A-Za-z0-9]/.test(pwd)) score++;
+    if (score <= 1) return { score, label: "Muito fraca", color: "bg-rose-500" };
+    if (score === 2) return { score, label: "Fraca", color: "bg-orange-400" };
+    if (score === 3) return { score, label: "Moderada", color: "bg-amber-400" };
+    if (score === 4) return { score, label: "Forte", color: "bg-emerald-400" };
+    return { score, label: "Muito forte", color: "bg-emerald-500" };
+  }
+
+  const strength = getPasswordStrength(newPassword);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (newPassword.length < 6) {
-      toast({ variant: "destructive", title: "A nova senha precisa ter no mínimo 6 caracteres." });
+    if (newPassword.length < minLen) {
+      toast({ variant: "destructive", title: `A senha precisa ter no mínimo ${minLen} caracteres.` });
+      return;
+    }
+
+    if (requireStrong && !isStrongPassword(newPassword)) {
+      toast({
+        variant: "destructive",
+        title: "Senha fraca",
+        description: "A senha precisa ter letras maiúsculas, números e caracteres especiais.",
+      });
       return;
     }
 
@@ -36,18 +74,21 @@ export default function AlterarSenha() {
     setLoading(true);
 
     try {
-      // Reautentica com a senha atual para confirmar identidade
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.email) throw new Error("Usuário não encontrado.");
 
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: currentPassword,
-      });
+      // Só reautentica se requirePasswordConfirmation estiver ativo
+      if (requireCurrentPassword) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: currentPassword,
+        });
 
-      if (signInError) {
-        toast({ variant: "destructive", title: "Senha atual incorreta." });
-        return;
+        if (signInError) {
+          toast({ variant: "destructive", title: "Senha atual incorreta." });
+          setLoading(false);
+          return;
+        }
       }
 
       // Atualiza para a nova senha
@@ -111,33 +152,37 @@ export default function AlterarSenha() {
               <h2 className="text-base font-bold text-foreground">Alterar senha</h2>
             </div>
             <p className="text-xs text-muted-foreground mb-6">
-              Confirme sua senha atual e defina uma nova.
+              {requireCurrentPassword
+                ? "Confirme sua senha atual e defina uma nova."
+                : "Defina uma nova senha para sua conta."}
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Senha atual */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground/80">Senha atual</label>
-                <div className="relative">
-                  <Input
-                    type={showCurrent ? "text" : "password"}
-                    placeholder="Sua senha atual"
-                    className="h-10 rounded-xl text-sm bg-background border-border/80 focus-visible:ring-primary/25 pr-10"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    required
-                    autoComplete="current-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowCurrent(!showCurrent)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    tabIndex={-1}
-                  >
-                    {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+              {/* Senha atual — só exibe se requirePasswordConfirmation=true */}
+              {requireCurrentPassword && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground/80">Senha atual</label>
+                  <div className="relative">
+                    <Input
+                      type={showCurrent ? "text" : "password"}
+                      placeholder="Sua senha atual"
+                      className="h-10 rounded-xl text-sm bg-background border-border/80 focus-visible:ring-primary/25 pr-10"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      required
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrent(!showCurrent)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      tabIndex={-1}
+                    >
+                      {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Nova senha */}
               <div className="space-y-1.5">
@@ -145,7 +190,7 @@ export default function AlterarSenha() {
                 <div className="relative">
                   <Input
                     type={showNew ? "text" : "password"}
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder={`Mínimo ${minLen} caracteres`}
                     className="h-10 rounded-xl text-sm bg-background border-border/80 focus-visible:ring-primary/25 pr-10"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
@@ -161,6 +206,41 @@ export default function AlterarSenha() {
                     {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+
+                {/* Barra de força da senha */}
+                {newPassword.length > 0 && (
+                  <div className="space-y-1 mt-1.5">
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <div
+                          key={i}
+                          className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                            i <= strength.score ? strength.color : "bg-muted"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    {strength.label && (
+                      <p className="text-[11px] text-muted-foreground">{strength.label}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Requisitos de senha forte */}
+                {requireStrong && newPassword.length > 0 && (
+                  <div className="flex flex-col gap-1 mt-2">
+                    {[
+                      { ok: /[A-Z]/.test(newPassword), label: "Letra maiúscula" },
+                      { ok: /[0-9]/.test(newPassword), label: "Número" },
+                      { ok: /[^A-Za-z0-9]/.test(newPassword), label: "Caractere especial" },
+                    ].map(({ ok, label }) => (
+                      <div key={label} className="flex items-center gap-1.5">
+                        <div className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-500" : "bg-muted-foreground/30"}`} />
+                        <span className={`text-[11px] ${ok ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Confirmar nova senha */}
@@ -185,6 +265,9 @@ export default function AlterarSenha() {
                     {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                {confirmPassword.length > 0 && newPassword !== confirmPassword && (
+                  <p className="text-[11px] text-rose-500">As senhas não coincidem</p>
+                )}
               </div>
 
               <Button

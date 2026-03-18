@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import type { TaskWithSupplier } from "@/types/task";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   CheckCircle2,
   Circle,
@@ -23,9 +23,10 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format, isValid, formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { TaskTimer } from "@/components/TaskTimer";
 import { useTaskStore } from "@/hooks/useTaskStore";
+import { useSettings } from "@/hooks/useSettings";
+import { useDateFormat } from "@/hooks/useDateFormat";
 
 interface Props {
   task: TaskWithSupplier | null;
@@ -155,6 +156,8 @@ export function TaskDetailModal({
   onDelete,
 }: Props) {
   const { updateTask } = useTaskStore();
+  const { settings } = useSettings();
+  const { formatDate, formatDateTime, locale } = useDateFormat();
   const [showCompletion, setShowCompletion] = useState(false);
 
   if (!task) return null;
@@ -201,13 +204,23 @@ export function TaskDetailModal({
 
   const handleCompletionDone = () => {
     setShowCompletion(false);
-    // Fecha o modal 200ms depois da animação sumir
-    setTimeout(() => onOpenChange(false), 200);
+    // Fecha o modal somente se a configuração permitir
+    if (settings.system.autoCloseModalOnComplete) {
+      setTimeout(() => onOpenChange(false), 200);
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[520px] p-0 overflow-hidden gap-0 border-0 shadow-2xl">
+        {/* Títulos acessíveis para leitores de tela */}
+        <DialogTitle className="sr-only">
+          {task.title}
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          Detalhes da tarefa: {task.title}. Prioridade {task.priority}. Vencimento {task.due_date}.
+        </DialogDescription>
+
         {/* Accent bar por prioridade */}
         <div className={`h-1 w-full ${config.accent}`} />
 
@@ -322,11 +335,11 @@ export function TaskDetailModal({
                         isOverdue ? "text-rose-600 dark:text-rose-400" : "text-foreground"
                       }`}
                     >
-                      {format(dateObj, "dd/MM/yyyy", { locale: ptBR })}
+                      {formatDate(dateObj)}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
                       {isOverdue ? "Vencida " : ""}
-                      {formatDistanceToNow(dateObj, { locale: ptBR, addSuffix: true })}
+                      {formatDistanceToNow(dateObj, { locale, addSuffix: true })}
                     </p>
                   </>
                 ) : (
@@ -477,7 +490,7 @@ export function TaskDetailModal({
                   Criada em
                 </p>
                 <p className="text-xs text-foreground font-medium font-mono">
-                  {isValid(createdAt) ? format(createdAt, "dd/MM/yyyy", { locale: ptBR }) : "—"}
+                  {isValid(createdAt) ? formatDate(createdAt) : "—"}
                 </p>
               </div>
               <div>
@@ -486,7 +499,7 @@ export function TaskDetailModal({
                 </p>
                 <p className="text-xs text-foreground font-medium font-mono">
                   {isValid(updatedAt)
-                    ? formatDistanceToNow(updatedAt, { locale: ptBR, addSuffix: true })
+                    ? formatDistanceToNow(updatedAt, { locale, addSuffix: true })
                     : "—"}
                 </p>
               </div>

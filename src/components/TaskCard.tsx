@@ -6,10 +6,12 @@ import {
   CheckCircle2, Circle, Pencil, Trash2, Calendar,
   AlertCircle, MapPin, Clock, Tag, ChevronRight, Building2,
 } from "lucide-react";
-import { format, isValid, differenceInDays } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { isValid, differenceInDays } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useSettings } from "@/hooks/useSettings";
+import { useDateFormat } from "@/hooks/useDateFormat";
+import { useI18n } from "@/hooks/useI18n";
 
 interface Props {
   task: TaskWithSupplier;
@@ -117,6 +119,9 @@ export function TaskCard({ task, onToggle, onEdit, onDelete, onOpen }: Props) {
   const isCompleted = task.status === "completed";
   const { supplier } = task;
   const config = priorityConfig[task.priority];
+  const { settings } = useSettings();
+  const { formatCardDate } = useDateFormat();
+  const t = useI18n();
 
   const [showCompletionFx, setShowCompletionFx] = useState(false);
   const [showDeleteFx, setShowDeleteFx] = useState(false);
@@ -142,6 +147,15 @@ export function TaskCard({ task, onToggle, onEdit, onDelete, onOpen }: Props) {
 
   function handleDeleteClick(e: React.MouseEvent) {
     e.stopPropagation();
+    // Se confirmação desabilitada nas configurações, exclui direto
+    if (!settings.system.confirmBeforeDelete) {
+      setShowDeleteFx(true);
+      setTimeout(() => {
+        setShowDeleteFx(false);
+        onDelete(task.id);
+      }, 320);
+      return;
+    }
     if (!deleteConfirm) {
       // Primeiro clique: pede confirmação
       setDeleteConfirm(true);
@@ -186,7 +200,9 @@ export function TaskCard({ task, onToggle, onEdit, onDelete, onOpen }: Props) {
 
       <button
         onClick={() => onOpen(task)}
-        className="w-full text-left px-4 pt-3.5 pb-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-2xl"
+        className={`w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-2xl ${
+          settings.interface.compactCards ? "px-4 pt-2 pb-2" : "px-4 pt-3.5 pb-3"
+        }`}
       >
         <div className="flex items-start gap-3">
           {/* Botão de status com animação */}
@@ -240,16 +256,16 @@ export function TaskCard({ task, onToggle, onEdit, onDelete, onOpen }: Props) {
             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
               <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide", config.bgColor, config.textColor)}>
                 <span className={cn("h-1.5 w-1.5 rounded-full", config.dot)} />
-                {config.label}
+                {t[task.priority]}
               </span>
               {isOverdue && (
                 <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400">
-                  <AlertCircle className="h-3 w-3" />Atrasada
+                  <AlertCircle className="h-3 w-3" />{t.overdue}
                 </span>
               )}
               {isDueSoon && (
                 <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-orange-50 text-orange-600 dark:bg-orange-950/50 dark:text-orange-400">
-                  <Clock className="h-3 w-3" />Vence em breve
+                  <Clock className="h-3 w-3" />{t.dueSoon}
                 </span>
               )}
               {tags.slice(0, 2).map((tag) => (
@@ -286,7 +302,7 @@ export function TaskCard({ task, onToggle, onEdit, onDelete, onOpen }: Props) {
               <div className="flex items-center gap-1">
                 <Calendar className={cn("h-3 w-3 shrink-0", isOverdue ? "text-rose-500" : isDueSoon ? "text-orange-500" : "text-muted-foreground/40")} />
                 <span className={cn("text-[11px] font-medium", isOverdue ? "text-rose-500" : isDueSoon ? "text-orange-500" : "text-muted-foreground/60")}>
-                  {isDateValid ? format(dateObj, "dd 'de' MMM", { locale: ptBR }) : "Sem data"}
+                  {isDateValid ? formatCardDate(dateObj) : t.noDate}
                 </span>
               </div>
               {task.estimated_hours && task.estimated_hours > 0 && (

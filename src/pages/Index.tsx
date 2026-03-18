@@ -35,6 +35,8 @@ import type { Task } from "@/types/task";
 import { motion, AnimatePresence } from "framer-motion";
 import { FeedbackOverlay } from "@/components/FeedbackOverlay";
 import { useActionFeedback } from "@/hooks/useActionFeedback";
+import { useDueDateAlerts } from "@/hooks/useDueDateAlerts";
+import { useI18n } from "@/hooks/useI18n";
 
 type Tab = "tasks" | "trash" | "suppliers";
 
@@ -45,6 +47,10 @@ const Index = () => {
   const navigate = useNavigate();
   const { settings } = useSettings();
   const { feedback, trigger: triggerFeedback, clear: clearFeedback } = useActionFeedback();
+  const t = useI18n();
+
+  // Alertas de data de vencimento controlados por settings.notifications
+  useDueDateAlerts(store.tasks);
 
   const defaultTab = (settings.system.defaultTab as Tab) ?? "tasks";
   const [tab, setTab] = useState<Tab>(defaultTab);
@@ -78,19 +84,19 @@ const Index = () => {
   const tabs: { id: Tab; label: string; icon: React.ReactNode; count?: number }[] = [
     {
       id: "tasks",
-      label: "Tarefas",
+      label: t.tasks,
       icon: <ClipboardList className="h-3.5 w-3.5" />,
       count: store.pendingCount > 0 ? store.pendingCount : undefined,
     },
     {
       id: "suppliers",
-      label: "Fornecedores",
+      label: t.suppliers,
       icon: <Building2 className="h-3.5 w-3.5" />,
       count: store.suppliers.length > 0 ? store.suppliers.length : undefined,
     },
     {
       id: "trash",
-      label: "Lixeira",
+      label: t.trash,
       icon: <Trash2 className="h-3.5 w-3.5" />,
       count: store.trashedTasks.length > 0 ? store.trashedTasks.length : undefined,
     },
@@ -107,12 +113,35 @@ const Index = () => {
     triggerFeedback("supplier-created");
   }
 
+  // Som de conclusão de tarefa (configuração notifications.taskCompletionSound)
+  function playCompletionSound() {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 660;
+      osc.type = "sine";
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.4);
+    } catch { }
+  }
+
   function handleToggleWithFeedback(id: string) {
     const task = store.tasks.find(t => t.id === id) ?? store.trashedTasks.find(t => t.id === id);
     const willComplete = task?.status === "pending";
     store.toggleStatus(id);
-    if (willComplete) triggerFeedback("task-completed");
-    else triggerFeedback("task-reopened");
+    if (willComplete) {
+      triggerFeedback("task-completed");
+      if (settings.notifications.enabled && settings.notifications.taskCompletionSound) {
+        playCompletionSound();
+      }
+    } else {
+      triggerFeedback("task-reopened");
+    }
   }
 
   function handleDeleteWithFeedback(id: string) {
@@ -156,7 +185,7 @@ const Index = () => {
               className="h-8 rounded-xl border-primary/20 text-primary hover:bg-primary/5 hover:text-primary gap-1.5 hidden sm:flex"
             >
               <UserPlus className="h-3.5 w-3.5" />
-              Fornecedor
+              {t.newSupplier}
             </Button>
 
             <Button
@@ -165,20 +194,22 @@ const Index = () => {
               className="h-8 rounded-xl gap-1.5 shadow-sm shadow-primary/20"
             >
               <Plus className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Nova Tarefa</span>
-              <span className="sm:hidden">Tarefa</span>
+              <span className="hidden sm:inline">{t.newTask}</span>
+              <span className="sm:hidden">{t.task}</span>
             </Button>
 
-            {/* Timeline */}
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => navigate("/timeline")}
-              className="h-8 w-8 rounded-xl text-muted-foreground hover:text-foreground"
-              title="Timeline do dia"
-            >
-              <CalendarDays className="h-4 w-4" />
-            </Button>
+            {/* Timeline — controlado por calendar.enabled */}
+            {settings.calendar.enabled && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => navigate("/timeline")}
+                className="h-8 w-8 rounded-xl text-muted-foreground hover:text-foreground"
+                title="Timeline do dia"
+              >
+                <CalendarDays className="h-4 w-4" />
+              </Button>
+            )}
 
             {/* Configurações */}
             <Button
@@ -191,16 +222,18 @@ const Index = () => {
               <Settings2 className="h-4 w-4" />
             </Button>
 
-            {/* Alterar senha */}
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => navigate("/alterar-senha")}
-              className="h-8 w-8 rounded-xl text-muted-foreground hover:text-foreground"
-              title="Alterar senha"
-            >
-              <KeyRound className="h-4 w-4" />
-            </Button>
+            {/* Alterar senha — controlado por security.showChangePasswordInMenu */}
+            {settings.security.showChangePasswordInMenu && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => navigate("/alterar-senha")}
+                className="h-8 w-8 rounded-xl text-muted-foreground hover:text-foreground"
+                title="Alterar senha"
+              >
+                <KeyRound className="h-4 w-4" />
+              </Button>
+            )}
 
             <Button
               size="icon"
@@ -253,7 +286,7 @@ const Index = () => {
             >
               {t.icon}
               {t.label}
-              {t.count !== undefined && (
+              {settings.interface.showTaskCount && t.count !== undefined && (
                 <span className={`
                   inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full text-[10px] font-bold
                   ${tab === t.id
@@ -297,7 +330,7 @@ const Index = () => {
                 )}
 
                 {/* Task list */}
-                <div className={`space-y-2 task-list ${settings.interface.compactCards ? "space-y-1" : ""}`}>
+                <div className={`task-list ${settings.interface.compactCards ? "space-y-1" : "space-y-2"}`}>
                   {store.tasks.map((task) => (
                     <TaskCard
                       key={task.id}
@@ -321,12 +354,12 @@ const Index = () => {
                       <ClipboardList className="h-7 w-7 text-primary/60" />
                     </div>
                     <h3 className="font-semibold text-foreground mb-1">
-                      {store.searchQuery ? "Nenhum resultado" : "Tudo limpo!"}
+                      {store.searchQuery ? t.noResults : t.allClean}
                     </h3>
                     <p className="text-sm text-muted-foreground mb-6">
                       {store.searchQuery
-                        ? `Nenhuma tarefa com "${store.searchQuery}".`
-                        : "Adicione sua primeira tarefa para começar."}
+                        ? t.noTaskWith(store.searchQuery)
+                        : t.addFirstTask}
                     </p>
                     {!store.searchQuery && (
                       <Button
@@ -335,7 +368,7 @@ const Index = () => {
                         className="gap-2"
                       >
                         <Plus className="h-4 w-4" />
-                        Nova Tarefa
+                        {t.newTask}
                       </Button>
                     )}
                   </motion.div>

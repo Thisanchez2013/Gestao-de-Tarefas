@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -255,9 +256,9 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
               <DialogTitle className="text-base font-bold">
                 {isEditing ? "Editar Tarefa" : "Nova Tarefa"}
               </DialogTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
                 {isEditing ? "Altere os campos abaixo" : "Preencha os dados da nova tarefa"}
-              </p>
+              </DialogDescription>
             </div>
           </div>
 
@@ -568,9 +569,24 @@ export function TaskFormDialog({ open, onOpenChange, onSubmit, editTask, onUpdat
 }
 
 // ─── Sub-componentes ──────────────────────────────────────────
-function TagsField({ tags, tagInput, tagInputRef, setTagInput, addTag, removeTag, handleTagKeyDown, error, required, savedOptions = [], onSaveOption, onDeleteOption }: any) {
+interface TagsFieldProps {
+  tags: string[];
+  tagInput: string;
+  tagInputRef: React.RefObject<HTMLInputElement>;
+  setTagInput: (v: string) => void;
+  addTag: (v: string) => void;
+  removeTag: (v: string) => void;
+  handleTagKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  error?: string;
+  required?: boolean;
+  savedOptions?: string[];
+  onSaveOption: (v: string) => void;
+  onDeleteOption: (v: string) => void;
+}
+
+function TagsField({ tags, tagInput, tagInputRef, setTagInput, addTag, removeTag, handleTagKeyDown, error, required, savedOptions = [], onSaveOption, onDeleteOption }: TagsFieldProps) {
   // Sugestões: opções salvas que ainda não estão selecionadas
-  const suggestions = (savedOptions as string[]).filter((o: string) => !tags.includes(o));
+  const suggestions = savedOptions.filter((o) => !tags.includes(o));
 
   return (
     <div className="space-y-1.5">
@@ -581,7 +597,7 @@ function TagsField({ tags, tagInput, tagInputRef, setTagInput, addTag, removeTag
       {/* Sugestões salvas pelo usuário */}
       {suggestions.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {suggestions.map((opt: string) => (
+          {suggestions.map((opt) => (
             <div key={opt} className="group relative inline-flex items-center">
               <button
                 type="button"
@@ -609,7 +625,7 @@ function TagsField({ tags, tagInput, tagInputRef, setTagInput, addTag, removeTag
         className="flex flex-wrap gap-1.5 p-2.5 rounded-xl border border-border/80 bg-background min-h-[44px] cursor-text"
         onClick={() => tagInputRef.current?.focus()}
       >
-        {tags.map((tag: string) => (
+        {tags.map((tag) => (
           <span key={tag} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-[11px] font-semibold rounded-full px-2.5 py-1">
             {tag}
             <button type="button" onClick={() => removeTag(tag)} className="hover:text-destructive transition-colors">
@@ -632,7 +648,14 @@ function TagsField({ tags, tagInput, tagInputRef, setTagInput, addTag, removeTag
   );
 }
 
-function NotesField({ notes, setNotes, error, required }: any) {
+interface NotesFieldProps {
+  notes: string;
+  setNotes: (v: string) => void;
+  error?: string;
+  required?: boolean;
+}
+
+function NotesField({ notes, setNotes, error, required }: NotesFieldProps) {
   return (
     <div className="space-y-1.5">
       <Label htmlFor="notes" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">

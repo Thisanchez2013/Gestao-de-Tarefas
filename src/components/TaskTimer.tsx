@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useTimer, formatClock, formatSeconds, formatSecondsLong } from "@/hooks/useTimer";
 import { useSettings } from "@/hooks/useSettings";
+import { useI18n } from "@/hooks/useI18n";
 import type { Task, TimeEntry } from "@/types/task";
 import { format, isValid, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -505,7 +506,11 @@ function SessionTimeline({ entries, total }: { entries: TimeEntry[]; total: numb
 // ══════════════════════════════════════════════════════════════
 export function TaskTimer({ task, onUpdate }: Props) {
   const { settings } = useSettings();
+  const t = useI18n();
   const isSessionMode = settings.system.task_time_mode === "session_based";
+
+  // Se o módulo de cronômetro estiver desativado, não renderiza nada
+  if (!settings.timer.enabled) return null;
 
   const {
     isRunning, elapsed, totalTracked, timeEntries, loadingEntries,
@@ -585,13 +590,13 @@ export function TaskTimer({ task, onUpdate }: Props) {
                   ? "bg-violet-100 text-violet-600 dark:bg-violet-950/50 dark:text-violet-300"
                   : "bg-sky-100 text-sky-600 dark:bg-sky-950/50 dark:text-sky-300"
               }`}>
-                {isSessionMode ? "SESSÕES" : "SIMPLES"}
+                {isSessionMode ? t.sessionMode : t.simpleMode}
               </span>
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Botão exportar — só aparece se tiver sessões */}
-              {isSessionMode && sessionCount > 0 && (
+              {/* Botão exportar — só aparece se tiver sessões e exportação habilitada */}
+              {isSessionMode && sessionCount > 0 && settings.timer.exportEnabled && (
                 <button
                   onClick={() => setShowExport(true)}
                   className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-primary/5"
@@ -602,8 +607,8 @@ export function TaskTimer({ task, onUpdate }: Props) {
                 </button>
               )}
 
-              {/* Toggle histórico */}
-              {isSessionMode && sessionCount > 0 && (
+              {/* Toggle histórico — controlado por settings.timer.showSessionHistory */}
+              {isSessionMode && sessionCount > 0 && settings.timer.showSessionHistory && (
                 <button
                   onClick={() => setShowHistory(v => !v)}
                   className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
@@ -622,7 +627,7 @@ export function TaskTimer({ task, onUpdate }: Props) {
                   >
                     <motion.span className="h-1.5 w-1.5 rounded-full bg-emerald-500"
                       animate={{ opacity: [1, 0.2, 1] }} transition={{ duration: 1.1, repeat: Infinity }} />
-                    AO VIVO
+                    {t.liveLabel}
                   </motion.span>
                 )}
               </AnimatePresence>
@@ -833,7 +838,7 @@ export function TaskTimer({ task, onUpdate }: Props) {
 
         {/* ══ HISTÓRICO ═══════════════════════════════════════ */}
         <AnimatePresence>
-          {isSessionMode && showHistory && (
+          {isSessionMode && showHistory && settings.timer.showSessionHistory && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}

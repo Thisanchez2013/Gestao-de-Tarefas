@@ -22,52 +22,48 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <SettingsProvider>
+        <SettingsProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
                   <TaskStoreProvider>
                     <Index />
                   </TaskStoreProvider>
-                </SettingsProvider>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute>
-                <SettingsProvider>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
                   <Settings />
-                </SettingsProvider>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/timeline"
-            element={
-              <ProtectedRoute>
-                <SettingsProvider>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/timeline"
+              element={
+                <ProtectedRoute>
                   <TaskStoreProvider>
                     <Timeline />
                   </TaskStoreProvider>
-                </SettingsProvider>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/alterar-senha"
-            element={
-              <ProtectedRoute>
-                <AlterarSenha />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/alterar-senha"
+              element={
+                <ProtectedRoute>
+                  <AlterarSenha />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </SettingsProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

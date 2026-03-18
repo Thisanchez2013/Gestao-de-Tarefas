@@ -1,12 +1,13 @@
 // src/components/supplier/SupplierFormDialog.tsx
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useTaskStore } from "@/hooks/useTaskStore";
 import { useSettings } from "@/hooks/useSettings";
+import type { SupplierFieldSettings } from "@/types/settings";
 import { useUserOptions } from "@/hooks/useUserOptions";
 import { ComboInput } from "@/components/ui/ComboInput";
 import { Supplier, SupplierFormData } from "@/types/supplier";
@@ -100,11 +101,11 @@ export function SupplierFormDialog({ open, onOpenChange, editSupplier, onSuccess
   };
 
   function FieldLabel({ fieldKey, icon, children }: {
-    fieldKey: keyof ReturnType<typeof useSettings>["settings"]["suppliers"]["fields"];
+    fieldKey: keyof SupplierFieldSettings;
     icon?: React.ReactNode;
     children: React.ReactNode;
   }) {
-    const required = isSupplierFieldRequired(fieldKey as any);
+    const required = isSupplierFieldRequired(fieldKey);
     return (
       <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
         {icon}{children}
@@ -131,9 +132,9 @@ export function SupplierFormDialog({ open, onOpenChange, editSupplier, onSuccess
               <DialogTitle className="text-base font-bold">
                 {editSupplier ? "Editar Fornecedor" : "Novo Fornecedor"}
               </DialogTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
                 {editSupplier ? "Atualize as informações do fornecedor" : "Cadastre um novo parceiro ou fornecedor"}
-              </p>
+              </DialogDescription>
             </div>
           </div>
         </DialogHeader>

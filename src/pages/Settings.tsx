@@ -20,6 +20,7 @@ import { useSettings } from "@/hooks/useSettings";
 import type { TaskFieldSettings, SupplierFieldSettings, FieldConfig } from "@/types/settings";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
+import { useI18n } from "@/hooks/useI18n";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
@@ -49,15 +50,15 @@ interface SectionMeta {
 }
 
 const SECTIONS: SectionMeta[] = [
-  { id: "overview", label: "Visão Geral", icon: <Grid3X3 className="h-4 w-4" />, description: "Resumo de todas as configurações", group: "Geral" },
-  { id: "interface", label: "Interface", icon: <Palette className="h-4 w-4" />, description: "Aparência e elementos visuais", group: "Geral" },
-  { id: "system", label: "Sistema", icon: <Sliders className="h-4 w-4" />, description: "Preferências gerais da aplicação", group: "Geral" },
-  { id: "notifications", label: "Notificações", icon: <Bell className="h-4 w-4" />, description: "Alertas e notificações do sistema", group: "Geral" },
-  { id: "tasks", label: "Tarefas", icon: <ClipboardList className="h-4 w-4" />, description: "Campos e comportamento do formulário", group: "Módulos" },
-  { id: "suppliers", label: "Fornecedores", icon: <Building2 className="h-4 w-4" />, description: "Campos do cadastro de fornecedores", group: "Módulos" },
-  { id: "timer", label: "Cronômetro", icon: <Timer className="h-4 w-4" />, description: "Rastreamento de tempo e sessões", group: "Módulos" },
-  { id: "calendar", label: "Calendário", icon: <CalendarDays className="h-4 w-4" />, description: "Visualização de calendário e lembretes", group: "Módulos" },
-  { id: "security", label: "Segurança", icon: <Shield className="h-4 w-4" />, description: "Senha, sessão e segurança da conta", group: "Conta" },
+  { id: "overview",      label: "Visão Geral",    icon: <Grid3X3 className="h-4 w-4" />,     description: "Resumo de todas as configurações",            group: "Geral" },
+  { id: "interface",     label: "Interface",      icon: <Palette className="h-4 w-4" />,     description: "Aparência e elementos visuais",               group: "Geral" },
+  { id: "system",        label: "Sistema",        icon: <Sliders className="h-4 w-4" />,     description: "Preferências gerais da aplicação",            group: "Geral" },
+  { id: "notifications", label: "Notificações",   icon: <Bell className="h-4 w-4" />,        description: "Alertas e notificações do sistema",           group: "Geral" },
+  { id: "tasks",         label: "Tarefas",        icon: <ClipboardList className="h-4 w-4" />, description: "Campos e comportamento do formulário",     group: "Módulos" },
+  { id: "suppliers",     label: "Fornecedores",   icon: <Building2 className="h-4 w-4" />,   description: "Campos do cadastro de fornecedores",          group: "Módulos" },
+  { id: "timer",         label: "Cronômetro",     icon: <Timer className="h-4 w-4" />,       description: "Rastreamento de tempo e sessões",             group: "Módulos" },
+  { id: "calendar",      label: "Calendário",     icon: <CalendarDays className="h-4 w-4" />, description: "Visualização de calendário e lembretes",    group: "Módulos" },
+  { id: "security",      label: "Segurança",      icon: <Shield className="h-4 w-4" />,      description: "Senha, sessão e segurança da conta",          group: "Conta" },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -137,7 +138,7 @@ function FieldRow({ field, onToggleVisible, onToggleRequired }: {
         )}>
           {field.locked ? <Lock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
             : field.visible ? <Eye className="h-3.5 w-3.5 text-primary" />
-              : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
+            : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-foreground truncate">{field.label}</p>
@@ -212,6 +213,7 @@ export default function Settings() {
     updateTimer, updateCalendar, updateSecurity, updateNotifications,
     resetToDefaults, isSaving,
   } = useSettings();
+  const t = useI18n();
 
   const [activeSection, setActiveSection] = useState<Section>("overview");
   const [savedFlash, setSavedFlash] = useState(false);
@@ -256,12 +258,12 @@ export default function Settings() {
                   exit={{ opacity: 0, scale: 0.85 }}
                   className="flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-3 py-1">
                   <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Salvo</span>
+                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">{t.savedLabel}</span>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {isSaving && <span className="text-[11px] text-muted-foreground animate-pulse">Sincronizando…</span>}
+            {isSaving && <span className="text-[11px] text-muted-foreground animate-pulse">{t.syncingLabel}</span>}
 
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -367,9 +369,9 @@ export default function Settings() {
                           {items.map(s => {
                             const isEnabled =
                               s.id === "timer" ? settings.timer.enabled
-                                : s.id === "calendar" ? settings.calendar.enabled
-                                  : s.id === "notifications" ? settings.notifications.enabled
-                                    : undefined;
+                              : s.id === "calendar" ? settings.calendar.enabled
+                              : s.id === "notifications" ? settings.notifications.enabled
+                              : undefined;
                             return (
                               <ModuleCard key={s.id} section={s}
                                 active={activeSection === s.id} enabled={isEnabled}
