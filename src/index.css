@@ -209,3 +209,46 @@
 .task-list > *:nth-child(5) { animation-delay: 160ms; }
 .task-list > *:nth-child(6) { animation-delay: 200ms; }
 .task-list > *:nth-child(n+7) { animation-delay: 240ms; }   
+/* Adicionar ao final de src/index.css */
+
+/* ─── Utilitários mobile ─────────────────────────────────────── */
+
+/* Esconde scrollbar mas mantém scroll funcional */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Touch tap highlight removido */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth scroll padrão */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Evita zoom no input em iOS */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+textarea,
+select {
+  font-size: 16px;
+}
+
+@media (min-width: 640px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: inherit;
+  }
+}
